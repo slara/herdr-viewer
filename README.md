@@ -1,9 +1,10 @@
 # herdr-viewer
 
 A document viewer pane for the [Herdr](https://herdr.dev) desktop app. Run
-`view spec.pdf` or `view README.md` in a terminal, and the document opens in a
-pane beside it: a PDF as a scrollable column of pages, a Markdown file rendered
-as a page with highlighted code, Mermaid diagrams and images.
+`view spec.pdf`, `view README.md` or `view diagram.png` in a terminal, and the
+file opens in a pane beside it: a PDF as a scrollable column of pages, a
+Markdown file rendered as a page with highlighted code, Mermaid diagrams and
+images, and an image fitted to the pane.
 
 ![The viewer showing a Markdown page beside a terminal](preview.png)
 
@@ -34,8 +35,8 @@ herdr-app check ~/.config/herdr-app/mods/pdf-links
 ```
 
 `~/.local/bin` must come before `/usr/bin` in your `PATH`. macOS already has a
-`view` command (vim, read-only); this one only takes PDF and Markdown files and
-passes everything else to `/usr/bin/view`, so that keeps working.
+`view` command (vim, read-only); this one only takes PDF, Markdown and image
+files and passes everything else to `/usr/bin/view`, so that keeps working.
 
 For the popup that opens PDFs mentioned in a terminal, add this key to the
 `global` section of `~/.config/herdr-app/keys.json` (it's also in this repo's
@@ -53,6 +54,7 @@ edit it, the file is yours and new defaults have to be added by hand.
 ```sh
 view spec.pdf          # beside this terminal (see "Where the viewer opens")
 view README.md         # Markdown, rendered
+view diagram.png       # an image: PNG, JPEG, GIF, WebP, BMP or SVG
 view --tab spec.pdf    # in a new tab
 ```
 
@@ -73,9 +75,9 @@ It finds absolute paths, `~/…`, `file://` URLs and names relative to the
 terminal's folder, including paths an agent wrapped over two lines. Only files
 that exist are listed. Paths with spaces aren't detected.
 
-### Keys in a PDF
+### Keys
 
-Click the viewer first.
+Click the viewer first. In a PDF:
 
 | Key | Action |
 |---|---|
@@ -89,7 +91,8 @@ Click the viewer first.
 | `o` | open in the default app |
 | `Cmd-O` | open another document |
 
-A Markdown page scrolls with the mouse or trackpad; only `r`, `o` and `Cmd-O`
+An image takes the zoom keys (`+` `=` `-` `0` `1`) and `r`, `o`, `Cmd-O`. A
+Markdown page scrolls with the mouse or trackpad; only `r`, `o` and `Cmd-O`
 apply to it.
 
 To bind these elsewhere, use the `mod:pdf-viewer` section of `keys.json`, for
@@ -104,6 +107,14 @@ and `pick`.
 Pages show as one continuous column, fitted to the pane's width, with page
 navigation and zoom. Only the visible pages and one on either side are
 rendered, so a long document doesn't render every page up front.
+
+### Images
+
+PNG, JPEG, GIF, WebP, BMP and SVG. The image is centered and shrunk to fit the
+pane, never enlarged; the toolbar shows its size in pixels and the zoom, and
+past the pane's size it scrolls both ways. Like Markdown images, it's copied
+to `~/.config/herdr-app/data/pdf-viewer/md/` first, since a mod can only draw
+images from Herdr's folder.
 
 ### Markdown
 
@@ -120,8 +131,8 @@ The page is drawn natively, block by block:
   relative to the file.
 
 Front matter (`---` YAML or `+++` TOML at the top) is left out. Links to other
-Markdown files or PDFs open in the same viewer; web links open in the browser,
-and other files in their default app.
+Markdown files, PDFs or images open in the same viewer; web links open in the
+browser, and other files in their default app.
 
 Not shown: remote (https) images, images inside a paragraph, math, and
 `#heading` links within the page. Files over 1 MiB can't be read.
@@ -167,6 +178,8 @@ view. So:
   at a resolution that follows the zoom and your screen's scale.
 - **Markdown** is split into text, code, diagram and image blocks, each drawn
   with Herdr's own element for it.
+- **Images** are copied under Herdr's folder and drawn with its image element,
+  sized from the SVG's `viewBox` or from `sips`.
 - **Placement** is a Python script, `mods/pdf-viewer/place.py`, that drives
   `herdr-app do`. It finds the neighbouring pane with `pane.go`; when the
   window hasn't drawn the panes yet, the tab's pane order (left first) decides.

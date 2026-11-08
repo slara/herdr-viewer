@@ -1,7 +1,8 @@
 // pdf-viewer: a document viewer pane for Herdr. Shows a PDF as a continuous,
 // scrollable column of pages. Pages are rasterized on demand with poppler's
 // `pdftoppm` into a cache under the app home, and drawn with `image()`.
-// A Markdown file is drawn natively, block by block: text with TextView, code
+// An image is shown on its own, fitted to the pane. A Markdown file is drawn
+// natively, block by block: text with TextView, code
 // with the read-only Editor (highlighting, copy), Mermaid diagrams rendered to
 // SVG by `mmdc`, and images, all with gpui's own elements.
 //
@@ -13,11 +14,12 @@ import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle, Tex
 import { exec, theme, appHome, home, props, nextCommand, readTextFile, settings } from "herdr";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
-import { isMarkdown, splitMarkdown, markdownTitle, resolveLink, editorLanguage, svgSize } from "./doc.js";
+import { isMarkdown, isImage, splitMarkdown, markdownTitle, resolveLink, editorLanguage, svgSize } from "./doc.js";
 
 const CACHE = "data/pdf-viewer";   // relative to appHome(); image() resolves from there
 const GAP = 14;                    // px between pages
 const PAD = 18;                    // px around the page column
+const TOOLBAR = 32;                // px, the toolbar's height
 const PX_PER_PT = 96 / 72;         // 100% zoom = the page at 96 dpi
 const DEVICE_SCALE = 2;            // render for HiDPI screens
 const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
@@ -35,6 +37,7 @@ export default class PdfViewer extends View {
     this.handle = cx.focus_handle();
     this.scroll = VirtualListScrollHandle.new();
     this.width = 0;
+    this.height = 0;
     this.zoom = "fit";            // "fit" (fit width) or a number from ZOOMS
     this.visible = { start: 0, end: 1 };
     this.shownPage = 0;
@@ -92,6 +95,9 @@ export default class PdfViewer extends View {
       const text = await readTextFile(file);   // up to 1 MiB
       if (text === null) throw new Error(`Cannot read ${file}`);
       return { file, kind: "md", blocks: splitMarkdown(text), title: markdownTitle(text), stamp: st.stdout.trim() };
+    }
+    if (isImage(file)) {
+      return { file, kind: "image", asset: await this.picture(file, file), title: "", stamp: st.stdout.trim() };
     }
     const info = await exec("pdfinfo", ["-f", "1", "-l", "100000", file]);
     if (info.code !== 0) throw new Error(info.stderr.trim().split("\n").pop() || "Not a readable PDF");
@@ -156,8 +162,20 @@ export default class PdfViewer extends View {
     return avail / this.maxWidthPt();
   }
 
+  // An image's zoom: image px per screen px. "fit" shrinks it into the pane, never enlarges.
+  imageScale() {
+    if (this.zoom !== "fit") return this.zoom;
+    const { w, h } = this.doc.asset;
+    return Math.min(1, (this.width - PAD * 2) / w, (this.height - TOOLBAR - PAD * 2) / h);
+  }
+
+  // The zoom as a fraction of 100%, for either kind.
+  zoomLevel() {
+    return this.doc?.asset ? this.imageScale() : this.scale() / PX_PER_PT;
+  }
+
   zoomPercent() {
-    return Math.round((this.scale() / PX_PER_PT) * 100);
+    return Math.round(this.zoomLevel() * 100);
   }
 
   // Render resolution, in buckets so resizing doesn't re-render on every pixel.
@@ -236,7 +254,7 @@ export default class PdfViewer extends View {
   }
 
   zoomBy(dir) {
-    const cur = this.scale() / PX_PER_PT;
+    const cur = this.zoomLevel();
     const next = dir > 0
       ? ZOOMS.find((z) => z > cur + 0.01) ?? ZOOMS[ZOOMS.length - 1]
       : [...ZOOMS].reverse().find((z) => z < cur - 0.01) ?? ZOOMS[0];
@@ -256,7 +274,7 @@ export default class PdfViewer extends View {
   pickFile(cx) {
     cx.spawn(async (cx) => {
       const r = await exec("osascript", ["-e", 'POSIX path of (choose file with prompt "Open a document" ' +
-        'of type {"com.adobe.pdf", "net.daringfireball.markdown"})']).catch(() => null);
+        'of type {"com.adobe.pdf", "net.daringfireball.markdown", "public.image"})']).catch(() => null);
       const path = r?.code === 0 ? r.stdout.trim() : "";
       if (path) this.open(path, cx);
       cx.notify();
@@ -264,8 +282,11 @@ export default class PdfViewer extends View {
   }
 
   command(c, cx) {
-    // Pages and zoom are a PDF's; a Markdown view scrolls by itself.
-    if (this.doc && !this.doc.pages && !["focus", "reload", "external", "pick"].includes(c)) return;
+    // Pages are a PDF's, zoom a PDF's or an image's; a Markdown view scrolls by itself.
+    const any = ["focus", "reload", "external", "pick"];
+    const zoom = ["zoom_in", "zoom_out", "fit", "actual"];
+    if (this.doc?.blocks && !any.includes(c)) return;
+    if (this.doc?.asset && !any.includes(c) && !zoom.includes(c)) return;
     switch (c) {
       case "focus": this.handle.focus(); break;
       case "next": this.goTo(this.shownPage + 1); break;
@@ -315,7 +336,7 @@ export default class PdfViewer extends View {
   toolbar(t) {
     const doc = this.doc;
     const name = this.file ? basename(this.file) : "PDF viewer";
-    const bar = h_flex().h(32).flex_none().px(8).gap(4).items_center()
+    const bar = h_flex().h(TOOLBAR).flex_none().px(8).gap(4).items_center()
       .bg(t.chrome).border_b(1).border_color(t.border).text_size(12)
       .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).font_semibold()
         .child(doc?.title ? `${doc.title} · ${name}` : name));
@@ -325,6 +346,16 @@ export default class PdfViewer extends View {
       .when(!!props()?.parked && !!props()?.id, (el) => el
         .child(div().w(1).h(16).mx(4).bg(t.border))
         .child(this.button("restore", "↩ Terminal", () => this.restoreTerminal(), t, { wide: true })));
+    const zoomControls = (el) => el
+      .child(this.button("zoom-out", "−", () => this.zoomBy(-1), t))
+      .child(div().text_color(t.muted).min_w(42).text_center().child(`${this.zoomPercent()}%`))
+      .child(this.button("zoom-in", "+", () => this.zoomBy(1), t))
+      .child(this.button("fit", "Fit", () => this.setZoom("fit"), t, { wide: true }))
+      .child(div().w(1).h(16).mx(4).bg(t.border));
+    if (doc.asset) {
+      return tail(zoomControls(bar.child(div().text_color(t.dim).mr(4)
+        .child(`${Math.round(doc.asset.w)} × ${Math.round(doc.asset.h)}`))));
+    }
     if (!doc.pages) return tail(bar);
     return tail(bar
       .child(this.button("prev", "‹", () => this.goTo(this.shownPage - 1), t))
@@ -332,11 +363,7 @@ export default class PdfViewer extends View {
         .child(`${this.shownPage + 1} / ${doc.pages.length}`))
       .child(this.button("next", "›", () => this.goTo(this.shownPage + 1), t))
       .child(div().w(1).h(16).mx(4).bg(t.border))
-      .child(this.button("zoom-out", "−", () => this.zoomBy(-1), t))
-      .child(div().text_color(t.muted).min_w(42).text_center().child(`${this.zoomPercent()}%`))
-      .child(this.button("zoom-in", "+", () => this.zoomBy(1), t))
-      .child(this.button("fit", "Fit", () => this.setZoom("fit"), t, { wide: true }))
-      .child(div().w(1).h(16).mx(4).bg(t.border)));
+      .when(true, zoomControls));
   }
 
   // ---- Markdown blocks -----------------------------------------------------
@@ -413,6 +440,7 @@ export default class PdfViewer extends View {
     const st = await exec("stat", ["-f", "%m %z", target]);
     if (st.code !== 0) throw new Error(`Image not found: ${src}`);
     const ext = (target.match(/\.(\w+)$/)?.[1] ?? "img").toLowerCase();
+    await fs.mkdir(`${appHome()}/${ASSETS}`, { recursive: true });
     const rel = `${ASSETS}/${createHash("sha1").update(`${target}\0${st.stdout.trim()}`).digest("hex").slice(0, 16)}.${ext}`;
     const abs = `${appHome()}/${rel}`;
     if (!(await fs.exists(abs))) {
@@ -526,6 +554,17 @@ export default class PdfViewer extends View {
       .when(wide, (el) => el.child(Scrollbar.horizontal("pdf-wide").absolute().inset_0()));
   }
 
+  // One image, centered while it fits, scrolling both ways once zoomed past the pane.
+  imageView(t) {
+    const a = this.doc.asset;
+    const k = this.imageScale();
+    return div().relative().flex_1().min_h(0).bg(t.canvas)
+      .child(div().id("img-scroll").size_full().overflow_scroll()
+        .child(h_flex().min_w_full().min_h_full().p(PAD).justify_center().items_center()
+          .child(image(a.path).w(Math.round(a.w * k)).h(Math.round(a.h * k)).flex_none())))
+      .child(Scrollbar.new("img-scroll").absolute().inset_0());
+  }
+
   empty(t) {
     return v_flex().flex_1().items_center().justify_center().gap(10).bg(t.canvas).text_color(t.muted)
       .child(div().text_size(13).child(this.error ?? (this.file ? "Opening…" : "No document")))
@@ -543,10 +582,13 @@ export default class PdfViewer extends View {
       .on_key_down((e, cx) => this.key(e, cx))
       .on_mouse_down("left", () => this.handle.focus())
       .on_size_change((size, cx) => {
-        if (Math.abs(size.width - this.width) >= 1) { this.width = size.width; cx.notify(); }
+        if (Math.abs(size.width - this.width) >= 1 || Math.abs(size.height - this.height) >= 1) {
+          this.width = size.width; this.height = size.height; cx.notify();
+        }
       })
       .child(this.toolbar(t))
       .child(this.doc?.blocks ? this.markdown(t)
+        : this.doc?.asset && this.width > 0 ? this.imageView(t)
         : this.doc && this.width > 0 ? this.pages(t) : this.empty(t));
   }
 

@@ -1,12 +1,17 @@
 // node --test tests/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isMarkdown, stripFrontMatter, labelAlerts, splitMarkdown, svgSize, editorLanguage, markdownTitle, resolveLink }
+import { isMarkdown, isImage, stripFrontMatter, labelAlerts, splitMarkdown, svgSize, editorLanguage, markdownTitle, resolveLink }
   from "../mods/pdf-viewer/doc.js";
 
 test("markdown extensions", () => {
   assert.ok(isMarkdown("/a/README.md") && isMarkdown("x.MARKDOWN"));
   assert.ok(!isMarkdown("/a/b.pdf") && !isMarkdown("/a/md"));
+});
+
+test("image formats the viewer draws", () => {
+  for (const p of ["a.png", "b.JPG", "c.jpeg", "d.gif", "e.webp", "f.bmp", "g.svg"]) assert.ok(isImage(p), p);
+  assert.ok(!isImage("h.tiff") && !isImage("i.pdf") && !isImage("png"));
 });
 
 test("front matter is left out, YAML or TOML, only at the top", () => {
@@ -24,7 +29,8 @@ test("links resolve from the file's folder", () => {
   const f = "/repo/docs/guide.md";
   assert.deepEqual(resolveLink("../README.md#usage", f), { kind: "doc", target: "/repo/README.md" });
   assert.deepEqual(resolveLink("spec%20v2.pdf", f), { kind: "doc", target: "/repo/docs/spec v2.pdf" });
-  assert.deepEqual(resolveLink("./img/a.png", f), { kind: "file", target: "/repo/docs/img/a.png" });
+  assert.deepEqual(resolveLink("./img/a.png", f), { kind: "doc", target: "/repo/docs/img/a.png" });
+  assert.deepEqual(resolveLink("data.csv", f), { kind: "file", target: "/repo/docs/data.csv" });
   assert.deepEqual(resolveLink("file:///tmp/x.md", f), { kind: "doc", target: "/tmp/x.md" });
   assert.deepEqual(resolveLink("https://herdr.dev", f), { kind: "web", target: "https://herdr.dev" });
   assert.deepEqual(resolveLink("#usage", f), { kind: "anchor", target: "#usage" });

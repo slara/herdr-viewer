@@ -1,6 +1,6 @@
 #!/bin/sh
-# view FILE.pdf|FILE.md       open a PDF or Markdown file in the Herdr viewer
-# view --tab FILE.pdf|FILE.md  open it in a new tab
+# view FILE         open a PDF, Markdown file or image in the Herdr viewer
+# view --tab FILE   open it in a new tab
 # Anything else (other files, options, no Herdr) goes to the system's `view` (vim -R).
 set -eu
 
@@ -12,6 +12,7 @@ tab=
 is_doc() {
   case "$1" in
     *.[pP][dD][fF]|*.[mM][dD]|*.[mM][aA][rR][kK][dD][oO][wW][nN]) return 0 ;;
+    *.[pP][nN][gG]|*.[jJ][pP][gG]|*.[jJ][pP][eE][gG]|*.[gG][iI][fF]|*.[wW][eE][bB][pP]|*.[bB][mM][pP]|*.[sS][vV][gG]) return 0 ;;
     *) return 1 ;;
   esac
 }

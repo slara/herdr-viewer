@@ -3,6 +3,8 @@
 
 export const isMarkdown = (path) => /\.(md|markdown|mdown|mkd)$/i.test(path);
 export const isPdf = (path) => /\.pdf$/i.test(path);
+// The formats image() draws.
+export const isImage = (path) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(path);
 
 // Front matter (`---` YAML or `+++` TOML at the very top) isn't shown, as in tmdview.
 export function stripFrontMatter(text) {
@@ -76,7 +78,7 @@ export function markdownTitle(text) {
 }
 
 // A link clicked in `file`: { kind: "web" | "doc" | "file" | "anchor", target }.
-// "doc" (Markdown or PDF) opens in the viewer, "file" in its default app,
+// "doc" (Markdown, PDF or an image) opens in the viewer, "file" in its default app,
 // "web" in the browser. Relative links start from the file's folder.
 export function resolveLink(url, file) {
   if (url.startsWith("#")) return { kind: "anchor", target: url };
@@ -96,5 +98,5 @@ export function resolveLink(url, file) {
     else if (seg && seg !== ".") parts.push(seg);
   }
   const target = "/" + parts.join("/");
-  return { kind: isMarkdown(target) || isPdf(target) ? "doc" : "file", target };
+  return { kind: isMarkdown(target) || isPdf(target) || isImage(target) ? "doc" : "file", target };
 }

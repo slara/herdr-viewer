@@ -1,9 +1,9 @@
 # herdr-viewer
 
-A document viewer pane. `view file.pdf` or `view file.md` in a terminal opens
-the document beside it: a PDF as a continuous column of white pages on the
-canvas, a Markdown file as a page of text, highlighted code, Mermaid diagrams
-and images. A Cmd-Shift-O popup lists the PDFs mentioned in a terminal and opens
+A document viewer pane. `view file.pdf`, `view file.md` or `view image.png` in
+a terminal opens the file beside it: a PDF as a continuous column of white
+pages on the canvas, a Markdown file as a page of text, highlighted code,
+Mermaid diagrams and images, an image centered and fitted to the pane. A Cmd-Shift-O popup lists the PDFs mentioned in a terminal and opens
 one the same way.
 
 ![herdr-viewer](preview.png)
@@ -26,6 +26,9 @@ one the same way.
   line. Diagrams and images are centered, at their own size, shrunk to fit.
   A diagram still rendering shows a 48px bordered box saying `Rendering
   diagram…`.
+- **Image body** (`canvas`): the image centered with 18px padding, shrunk to
+  fit (never enlarged). Toolbar: file name, the size in pixels (`1792 × 1121`,
+  `dim`), then `− 39% +`, `Fit`, `↗`.
 - **Empty pane** (no file): `No document` and an `Open document…` button
   (`solid` background) that opens the macOS file picker for PDF or Markdown.
 - **Popup** (560×360, at the top, 40px down, `popover` background): `Open a PDF
@@ -39,13 +42,13 @@ one the same way.
   returns to fit-width and keeps the current page. Keys (pane focused): `j n ↓
   → Space PageDown` next page, `k p ↑ ← Shift-Space PageUp` previous, `g Home` /
   `G End` first/last, `+ =` / `-` zoom, `0` fit, `1` 100%, `r` reload, `o` open
-  externally, `Cmd-O` pick a file. A Markdown page honours only `r`, `o`,
-  `Cmd-O`.
+  externally, `Cmd-O` pick a file. An image honours the zoom keys and `r`, `o`, `Cmd-O`;
+  a Markdown page only `r`, `o`, `Cmd-O`.
 - Only visible pages plus one either side are rendered; while a new zoom
   renders, the previous image of the page stays up, scaled.
 - The file is checked every 2 seconds; when its size or date changes, the
   document reloads and a PDF stays on its page.
-- Markdown links: Markdown or PDF targets open in the same viewer, web links in
+- Markdown links: Markdown, PDF or image targets open in the same viewer, web links in
   the browser, other files in their default app. Front matter is not shown.
   `> [!NOTE]`-style alerts show their label as a bold line.
 - Scrolling over a code block scrolls the editor; 400ms after the wheel stops,
@@ -93,7 +96,11 @@ one the same way.
   `pane.close`, `terminal.park`, `terminal.keep`, `tab.new`. State in
   `data/pdf-viewer/state.json` under `fcntl` lock: viewer id → pane, tab, file,
   parked terminal, anchor pane.
-- **CLI** `bin/view`: one `.pdf`/`.md`/`.markdown` argument inside Herdr
+- **Image:** the same copy-and-size path as Markdown images; fit scale is
+  `min(1, (width − 36) / w, (height − 32 − 36) / h)`, from the root's
+  `on_size_change`; zoomed past the pane, an `overflow_scroll` area with
+  `Scrollbar.new`.
+- **CLI** `bin/view`: one `.pdf`/`.md`/`.markdown`/image argument inside Herdr
   (`$HC_TERMINAL_ID` set) runs `place.py`; outside Herdr, `open`; anything else
   goes to `/usr/bin/view`.
 - Programs it runs: `pdfinfo`, `pdftoppm`, `mmdc`, `sips`, `stat`, `mv`, `cp`,
