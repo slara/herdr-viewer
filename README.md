@@ -10,10 +10,10 @@ images, and an image fitted to the pane.
 
 > [!IMPORTANT]
 > **This is a personal tool, written using AI.**
-> The code, tests and docs in this repo were written by an AI coding assistant ([Claude Code](https://claude.com/claude-code)).
-> I directed the work, tried the tool, reviewed and decided what to keep, but I did not write it by hand.
-> I built it for my own use, so expect no support, no roadmap and no stability promises.
-> Read the code before you depend on it.
+> The code, tests and docs in this repo were written with the help of an AI coding assistant ([Claude Code](https://claude.com/claude-code)).
+>
+> The software is provided "as is", without warranty of any kind (see [LICENSE](LICENSE)).
+> There is no support and no promise of stability. Read the code before you rely on it, and use it at your own risk.
 
 ## Requirements
 

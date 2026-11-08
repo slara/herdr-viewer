@@ -209,9 +209,8 @@ Everything lives under `~/.config/herdr-app/data/viewer/`:
   `place.py`, where it's tested. The Swift side only receives events and calls
   Launch Services.
 - **Native blocks over a browser.** A browser inside the terminal (as in
-  tmdview) renders HTML with JavaScript plugins, but it draws through Herdr's
-  Kitty graphics support, which is slow. Native elements are fast; what they
-  can't do is listed under known limits.
+  tmdview) renders HTML with JavaScript plugins; this viewer draws with Herdr's
+  own elements instead. What they can't do is listed under known limits.
 
 ## Known limits
 
