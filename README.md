@@ -1,7 +1,10 @@
 # Herdr PDF viewer
 
-A document viewer pane for the Herdr app (`herdr-app`). The first format is PDF:
-the pages show as a continuous, scrollable column, with zoom and page navigation.
+A document viewer pane for the Herdr app (`herdr-app`), for PDF and Markdown.
+A PDF shows as a continuous, scrollable column of pages, with zoom and page
+navigation. A Markdown file is rendered as a page, like
+[tmdview](https://github.com/slara/terminal-markdown-renderer) does, but natively
+in Herdr.
 
 Herdr mods have no web view, so each page is rasterized on demand with poppler's
 `pdftoppm` and drawn as an image. Only visible pages (plus one either side) are
@@ -12,6 +15,7 @@ and cache folders unused for 14 days are deleted.
 
 - Herdr app 0.1.13 or later, on macOS
 - poppler (`brew install poppler`), which provides `pdftoppm` and `pdfinfo`
+- mermaid-cli (`mmdc`), only for Mermaid diagrams in Markdown
 
 ## Install
 
@@ -21,9 +25,9 @@ herdr-app check ~/.config/herdr-app/mods/pdf-viewer
 ln -s ~/devel/herdr-pdf-viewer/bin/view ~/.local/bin/view
 ```
 
-`~/.local/bin` must come before `/usr/bin` in `PATH`. `view` only takes PDFs;
-anything else goes to the system's `/usr/bin/view` (vim, read-only), so that
-command keeps working.
+`~/.local/bin` must come before `/usr/bin` in `PATH`. `view` only takes PDF and
+Markdown files; anything else goes to the system's `/usr/bin/view` (vim,
+read-only), so that command keeps working.
 
 The symlinked mod loads from this folder, but Herdr's hot reload doesn't follow
 the symlink: after editing, close and reopen open viewers to get the new code.
@@ -32,10 +36,37 @@ the symlink: after editing, close and reopen open viewers to get the new code.
 
 ```sh
 view spec.pdf          # beside this terminal (see Placement)
+view README.md         # Markdown, rendered
 view --tab spec.pdf    # in a new tab
 ```
 
-Outside Herdr, `view file.pdf` opens the PDF in the default app.
+Outside Herdr, `view` opens the file in its default app.
+
+### Markdown
+
+Drawn natively, block by block, in one scrolling page:
+
+- **Text** with gpui's Markdown view (`TextView.markdown`): headings, lists, task
+  lists, tables, quotes and links. GitHub alerts (`> [!NOTE]`) show as a label.
+- **Code blocks** with gpui's read-only editor: syntax colors from the theme,
+  selectable, and a **Copy** button on each block.
+- **Mermaid** diagrams rendered to SVG by `mmdc` (`npm install -g
+  @mermaid-js/mermaid-cli`), in the light or dark theme, cached per diagram. The
+  first render of each takes a second or two.
+- **Images** (PNG, JPG, SVG) on a line of their own, from paths relative to the
+  file. They're copied to `~/.config/herdr-app/data/pdf-viewer/md/`, since a mod
+  can only draw images from Herdr's folder.
+
+As in tmdview, front matter (`---` YAML or `+++` TOML at the top) is left out and
+the page reloads when the file is saved. Links to other Markdown files or PDFs
+open in the same viewer; web links open in the browser, other files in their
+default app.
+
+Not shown: remote (https) images, images inside a paragraph, math, and
+`#heading` links within the page. Files over 1 MiB can't be read. tmdview's
+plugins are JavaScript for a browser, so they don't run here; the viewer does
+their job natively instead (highlighting with gpui's editor, diagrams with
+`mmdc`).
 
 ### Placement
 
@@ -107,6 +138,6 @@ The same actions can be bound in `keys.json` under `mod:pdf-viewer`, e.g.
 ## Tests
 
 ```sh
-node --test tests/                    # PDF path detection in terminal text
+node --test tests/                    # path detection, Markdown front matter and links
 python3 -m unittest discover tests    # placement rules, against a fake window
 ```

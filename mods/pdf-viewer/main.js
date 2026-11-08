@@ -1,15 +1,19 @@
 // pdf-viewer: a document viewer pane for Herdr. Shows a PDF as a continuous,
 // scrollable column of pages. Pages are rasterized on demand with poppler's
 // `pdftoppm` into a cache under the app home, and drawn with `image()`.
+// A Markdown file is drawn natively, block by block: text with TextView, code
+// with the read-only Editor (highlighting, copy), Mermaid diagrams rendered to
+// SVG by `mmdc`, and images, all with gpui's own elements.
 //
 // Open one with `view doc.pdf` (bin/view → place.py), which places it and
 // registers it so it can be replaced later.
 
 import { View, div, image } from "gpui-kit";
-import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle } from "gpui-base";
-import { exec, theme, appHome, home, props, nextCommand } from "herdr";
+import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle, TextView, Editor, EditorState } from "gpui-base";
+import { exec, theme, appHome, home, props, nextCommand, readTextFile, settings } from "herdr";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
+import { isMarkdown, splitMarkdown, markdownTitle, resolveLink, editorLanguage, svgSize } from "./doc.js";
 
 const CACHE = "data/pdf-viewer";   // relative to appHome(); image() resolves from there
 const GAP = 14;                    // px between pages
@@ -18,6 +22,9 @@ const PX_PER_PT = 96 / 72;         // 100% zoom = the page at 96 dpi
 const DEVICE_SCALE = 2;            // render for HiDPI screens
 const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 const CACHE_DAYS = 14;
+const ASSETS = `${CACHE}/md`;      // Mermaid SVGs and copies of a Markdown file's images
+const MD_WIDTH = 880;              // px, the Markdown page column
+const CODE_LINE = 20;              // px per line of a code block (Editor at 13 px)
 const PLACE = () => `${appHome()}/mods/pdf-viewer/place.py`;   // placement and parked terminals
 
 const expand = (p) => (p.startsWith("~/") ? home() + p.slice(1) : p);
@@ -48,6 +55,7 @@ export default class PdfViewer extends View {
   }
 
   reset() {
+    for (const b of this.doc?.blocks ?? []) b.state?.release();
     this.doc = null;              // { file, dir, title, stamp, pages: [{w, h}] } (pt, rotation applied)
     this.error = null;
     this.ready = new Map();       // `${page}@${dpi}` -> image path
@@ -69,6 +77,7 @@ export default class PdfViewer extends View {
         if (gen !== this.generation) return;
         this.doc = doc;
         this.prune();
+        if (doc.blocks) this.prepareBlocks(doc, gen, cx);
       } catch (e) {
         if (gen === this.generation) this.error = String(e?.message ?? e);
       }
@@ -79,6 +88,11 @@ export default class PdfViewer extends View {
   async inspect(file) {
     const st = await exec("stat", ["-f", "%m %z", file]);
     if (st.code !== 0) throw new Error(`Cannot read ${file}`);
+    if (isMarkdown(file)) {
+      const text = await readTextFile(file);   // up to 1 MiB
+      if (text === null) throw new Error(`Cannot read ${file}`);
+      return { file, kind: "md", blocks: splitMarkdown(text), title: markdownTitle(text), stamp: st.stdout.trim() };
+    }
     const info = await exec("pdfinfo", ["-f", "1", "-l", "100000", file]);
     if (info.code !== 0) throw new Error(info.stderr.trim().split("\n").pop() || "Not a readable PDF");
 
@@ -157,7 +171,7 @@ export default class PdfViewer extends View {
   // Called by a timer: keeps the page indicator current and renders the next
   // page the reader needs (visible first, then one either side).
   pump(cx) {
-    if (!this.doc) return;
+    if (!this.doc?.pages) return;
     if (this.restorePage != null) {
       this.scroll.scroll_to_item(Math.min(this.restorePage, this.doc.pages.length - 1), "top");
       this.restorePage = null;
@@ -241,8 +255,8 @@ export default class PdfViewer extends View {
 
   pickFile(cx) {
     cx.spawn(async (cx) => {
-      const r = await exec("osascript", ["-e",
-        'POSIX path of (choose file with prompt "Open a PDF" of type {"com.adobe.pdf"})']).catch(() => null);
+      const r = await exec("osascript", ["-e", 'POSIX path of (choose file with prompt "Open a document" ' +
+        'of type {"com.adobe.pdf", "net.daringfireball.markdown"})']).catch(() => null);
       const path = r?.code === 0 ? r.stdout.trim() : "";
       if (path) this.open(path, cx);
       cx.notify();
@@ -250,6 +264,8 @@ export default class PdfViewer extends View {
   }
 
   command(c, cx) {
+    // Pages and zoom are a PDF's; a Markdown view scrolls by itself.
+    if (this.doc && !this.doc.pages && !["focus", "reload", "external", "pick"].includes(c)) return;
     switch (c) {
       case "focus": this.handle.focus(); break;
       case "next": this.goTo(this.shownPage + 1); break;
@@ -304,7 +320,13 @@ export default class PdfViewer extends View {
       .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).font_semibold()
         .child(doc?.title ? `${doc.title} · ${name}` : name));
     if (!doc) return bar.child(this.button("pick", "Open…", (cx) => this.pickFile(cx), t, { wide: true }));
-    return bar
+    const tail = (el) => el
+      .child(this.button("external", "↗", () => this.openExternally(), t))
+      .when(!!props()?.parked && !!props()?.id, (el) => el
+        .child(div().w(1).h(16).mx(4).bg(t.border))
+        .child(this.button("restore", "↩ Terminal", () => this.restoreTerminal(), t, { wide: true })));
+    if (!doc.pages) return tail(bar);
+    return tail(bar
       .child(this.button("prev", "‹", () => this.goTo(this.shownPage - 1), t))
       .child(div().text_color(t.muted).min_w(56).text_center()
         .child(`${this.shownPage + 1} / ${doc.pages.length}`))
@@ -314,11 +336,158 @@ export default class PdfViewer extends View {
       .child(div().text_color(t.muted).min_w(42).text_center().child(`${this.zoomPercent()}%`))
       .child(this.button("zoom-in", "+", () => this.zoomBy(1), t))
       .child(this.button("fit", "Fit", () => this.setZoom("fit"), t, { wide: true }))
-      .child(div().w(1).h(16).mx(4).bg(t.border))
-      .child(this.button("external", "↗", () => this.openExternally(), t))
-      .when(!!props()?.parked && !!props()?.id, (el) => el
-        .child(div().w(1).h(16).mx(4).bg(t.border))
-        .child(this.button("restore", "↩ Terminal", () => this.restoreTerminal(), t, { wide: true })));
+      .child(div().w(1).h(16).mx(4).bg(t.border)));
+  }
+
+  // ---- Markdown blocks -----------------------------------------------------
+
+  // Editors for code blocks now; diagrams and images one by one in the background.
+  prepareBlocks(doc, gen, cx) {
+    for (const b of doc.blocks) if (b.type === "code") b.state = this.codeEditor(b);
+    cx.spawn(async (cx) => {
+      await fs.mkdir(`${appHome()}/${ASSETS}`, { recursive: true });
+      for (const b of doc.blocks) {
+        if (gen !== this.generation) return;
+        if (b.type !== "mermaid" && b.type !== "image") continue;
+        try {
+          b.asset = b.type === "mermaid" ? await this.mermaid(b.code) : await this.picture(b.src, doc.file);
+        } catch (e) {
+          b.error = String(e?.message ?? e).trim().split("\n").pop();
+        }
+        cx.notify();
+      }
+    });
+  }
+
+  codeEditor(b) {
+    const t = theme();
+    return EditorState.new({ language: editorLanguage(b.lang), value: b.code.replace(/\n$/, ""),
+      readonly: true, line_numbers: false, folding: false,
+      font_family: settings().font_family, font_size: 13,
+      syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
+  }
+
+  // The Editor scrolls itself (past its last line too) and keeps the wheel, so
+  // a block can scroll its code out of sight. A fresh editor puts it back once
+  // the wheel stops. shortcut: the page still doesn't scroll over a code block;
+  // fix for real if gpui-kit gets a way to turn the Editor's scrolling off.
+  snapBack(b, cx) {
+    const n = (b.wheel = (b.wheel ?? 0) + 1);
+    cx.timer.after(400, (cx) => {
+      if (b.wheel !== n || !b.state) return;
+      b.state.release();
+      b.state = this.codeEditor(b);
+      cx.notify();
+    });
+  }
+
+  // A diagram as an SVG, rendered once per source and theme. Labels must be SVG
+  // text: gpui's SVG renderer doesn't draw the HTML (<foreignObject>) mmdc uses by default.
+  async mermaid(code) {
+    const dark = !!settings().dark;
+    const config = `${appHome()}/${ASSETS}/mermaid.json`;
+    if (!(await fs.exists(config))) {
+      await fs.writeFile(config, JSON.stringify({ htmlLabels: false, flowchart: { htmlLabels: false } }));
+    }
+    const rel = `${ASSETS}/${createHash("sha1").update(`svg-labels\0${dark}\0${code}`).digest("hex").slice(0, 16)}.svg`;
+    const abs = `${appHome()}/${rel}`;
+    if (!(await fs.exists(abs))) {
+      const tmp = `${abs}.${Date.now()}`;
+      await fs.writeFile(`${tmp}.mmd`, code);
+      const r = await exec("mmdc", ["-q", "-i", `${tmp}.mmd`, "-o", `${tmp}.svg`,
+        "-t", dark ? "dark" : "default", "-b", "transparent", "-c", config]);
+      await fs.unlink(`${tmp}.mmd`).catch(() => {});
+      if (r.code !== 0) throw new Error(r.stderr || "mmdc failed");
+      const mv = await exec("mv", ["-f", `${tmp}.svg`, abs]);
+      if (mv.code !== 0) throw new Error(mv.stderr);
+    }
+    const size = svgSize((await readTextFile(abs)) ?? "");
+    if (!size) throw new Error("The diagram has no size");
+    return { path: rel, ...size };
+  }
+
+  // A local image, copied under the app home (image() only reads from there).
+  async picture(src, file) {
+    const { kind, target } = resolveLink(src, file);
+    if (kind === "web") throw new Error(`Remote image not shown: ${src}`);
+    const st = await exec("stat", ["-f", "%m %z", target]);
+    if (st.code !== 0) throw new Error(`Image not found: ${src}`);
+    const ext = (target.match(/\.(\w+)$/)?.[1] ?? "img").toLowerCase();
+    const rel = `${ASSETS}/${createHash("sha1").update(`${target}\0${st.stdout.trim()}`).digest("hex").slice(0, 16)}.${ext}`;
+    const abs = `${appHome()}/${rel}`;
+    if (!(await fs.exists(abs))) {
+      const cp = await exec("cp", [target, abs]);
+      if (cp.code !== 0) throw new Error(cp.stderr);
+    }
+    if (ext === "svg") {
+      const size = svgSize((await readTextFile(abs)) ?? "");
+      if (!size) throw new Error(`SVG without a size: ${src}`);
+      return { path: rel, ...size };
+    }
+    const r = await exec("sips", ["-g", "pixelWidth", "-g", "pixelHeight", abs]);
+    const w = +r.stdout.match(/pixelWidth:\s*(\d+)/)?.[1], h = +r.stdout.match(/pixelHeight:\s*(\d+)/)?.[1];
+    if (!w || !h) throw new Error(`Not an image: ${src}`);
+    return { path: rel, w, h };
+  }
+
+  copyCode(text, i, cx) {
+    try {
+      cx.write_to_clipboard(text);
+    } catch {
+      exec("sh", ["-c", 'printf %s "$1" | pbcopy', "sh", text]).catch(() => {});
+    }
+    this.copied = i;
+    cx.timer.after(1500, (cx) => { if (this.copied === i) { this.copied = null; cx.notify(); } });
+  }
+
+  // A clicked link: Markdown and PDFs open here, the web in the browser, other
+  // files in their default app.
+  // shortcut: overriding the click also drops TextView's own #anchor jumps; restore them if headings get ids.
+  followLink(url, cx) {
+    const { kind, target } = resolveLink(url, this.doc.file);
+    if (kind === "doc") this.open(target, cx);
+    else if (kind !== "anchor") exec("open", [target]).catch(() => {});
+  }
+
+  block(b, i, t, inner) {
+    if (b.type === "md") {
+      return TextView.markdown(`md-${i}`, b.text).selectable(true)
+        .on_link_click((url, cx) => { this.followLink(url, cx); cx.notify(); })
+        .w_full().text_color(t.foreground).text_size(14);
+    }
+    if (b.type === "code") {
+      const lines = b.code.replace(/\n$/, "").split("\n").length;
+      return v_flex().w_full().flex_none().rounded(6).border(1).border_color(t.border).bg(t.surface).overflow_hidden()
+        .child(h_flex().h(26).px(10).items_center().justify_between().border_b(1).border_color(t.border)
+          .text_size(11).text_color(t.dim)
+          .child(div().child(b.lang || "text"))
+          .child(div().id(`copy-${i}`).px(6).rounded(4).cursor_pointer()
+            .hover((s) => s.bg(t.hover).text_color(t.foreground))
+            .on_click((_e, cx) => { this.copyCode(b.code.replace(/\n$/, ""), i, cx); cx.notify(); })
+            .child(this.copied === i ? "Copied" : "Copy")))
+        .child(div().id(`code-${i}`).w_full().on_scroll_wheel((_e, cx) => this.snapBack(b, cx))
+          .child(Editor.new(b.state).w_full().h(lines * CODE_LINE + 12).px(6).py(6)));
+    }
+    // A diagram or an image: drawn at its own size, shrunk to fit the column.
+    const a = b.asset;
+    if (!a) {
+      return div().w_full().h(48).flex_none().flex().items_center().justify_center().rounded(6)
+        .border(1).border_color(t.border).text_size(12).text_color(t.dim)
+        .child(b.error ?? (b.type === "mermaid" ? "Rendering diagram…" : `Loading ${b.alt || "image"}…`));
+    }
+    const k = Math.min(1, inner / a.w);
+    return h_flex().w_full().flex_none().justify_center()
+      .child(image(a.path).w(Math.round(a.w * k)).h(Math.round(a.h * k)));
+  }
+
+  markdown(t) {
+    const col = Math.min(MD_WIDTH, this.width || MD_WIDTH);
+    const inner = col - 64;
+    return div().relative().flex_1().min_h(0).bg(t.canvas)
+      .child(v_flex().id("md-scroll").size_full().overflow_y_scroll().items_center()
+        .child(v_flex().w(col).flex_none().px(32).py(24).gap(14).bg(t.background)
+          .children(this.doc.blocks.map((b, i) => this.block(b, i, t, inner)))))
+      .child(Scrollbar.vertical("md-scroll").absolute().inset_0());
   }
 
   pageView(i, s, dpi, t) {
@@ -364,7 +533,7 @@ export default class PdfViewer extends View {
         div().id("pick-empty").px(12).py(6).rounded(6).cursor_pointer().bg(t.solid)
           .text_color(t.solid_foreground).text_size(12)
           .on_click((_e, cx) => this.pickFile(cx))
-          .child("Open PDF…")));
+          .child("Open document…")));
   }
 
   render(cx) {
@@ -377,7 +546,8 @@ export default class PdfViewer extends View {
         if (Math.abs(size.width - this.width) >= 1) { this.width = size.width; cx.notify(); }
       })
       .child(this.toolbar(t))
-      .child(this.doc && this.width > 0 ? this.pages(t) : this.empty(t));
+      .child(this.doc?.blocks ? this.markdown(t)
+        : this.doc && this.width > 0 ? this.pages(t) : this.empty(t));
   }
 
   // place.py --closed gives back the terminal this viewer parked, unless the

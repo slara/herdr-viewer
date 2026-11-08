@@ -1,6 +1,6 @@
 #!/bin/sh
-# view FILE.pdf        open a PDF in the Herdr viewer, beside this terminal
-# view --tab FILE.pdf  open it in a new tab
+# view FILE.pdf|FILE.md       open a PDF or Markdown file in the Herdr viewer
+# view --tab FILE.pdf|FILE.md  open it in a new tab
 # Anything else (other files, options, no Herdr) goes to the system's `view` (vim -R).
 set -eu
 
@@ -9,11 +9,14 @@ place="${HERDR_APP_HOME:-$HOME/.config/herdr-app}/mods/pdf-viewer/place.py"
 tab=
 [ "${1:-}" = "--tab" ] && { tab=--tab; shift; }
 
-is_pdf() {
-  case "$1" in *.pdf|*.PDF|*.Pdf) return 0 ;; *) return 1 ;; esac
+is_doc() {
+  case "$1" in
+    *.[pP][dD][fF]|*.[mM][dD]|*.[mM][aA][rR][kK][dD][oO][wW][nN]) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
-if [ $# -eq 1 ] && is_pdf "$1"; then
+if [ $# -eq 1 ] && is_doc "$1"; then
   [ -f "$1" ] || { echo "view: no such file: $1" >&2; exit 1; }
   if [ -n "${HC_TERMINAL_ID:-}" ] && [ -f "$place" ]; then
     exec python3 "$place" $tab "$1"
