@@ -5,7 +5,7 @@ A document viewer pane for the [Herdr](https://herdr.dev) desktop app. Run
 pane beside it: a PDF as a scrollable column of pages, a Markdown file rendered
 as a page with highlighted code, Mermaid diagrams and images.
 
-![The viewer showing this README beside a terminal](preview.png)
+![The viewer showing a Markdown page beside a terminal](preview.png)
 
 > [!IMPORTANT]
 > **This is a personal tool, written using AI.**
