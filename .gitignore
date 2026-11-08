@@ -1,0 +1,9 @@
+# Written by Herdr into each mod folder
+mods/*/gpui-kit.d.ts
+mods/*/jsconfig.json
+
+__pycache__/
+.DS_Store
+
+# Test documents
+*.pdf
