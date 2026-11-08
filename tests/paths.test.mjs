@@ -18,8 +18,8 @@ test("newest mention first", () => {
 });
 
 test("a path an agent wrapped over two lines", () => {
-  const got = find("  ⎿  /Users/me/servidor-dedicado-\n     guia-soporte.pdf\n");
-  assert.ok(got.includes("/Users/me/servidor-dedicado-guia-soporte.pdf"), JSON.stringify(got));
+  const got = find("  ⎿  /Users/me/quarterly-report-\n     draft-final.pdf\n");
+  assert.ok(got.includes("/Users/me/quarterly-report-draft-final.pdf"), JSON.stringify(got));
 });
 
 test("prose glued to a path by a line break still offers the path", () => {
