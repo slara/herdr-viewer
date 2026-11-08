@@ -2,12 +2,12 @@
 // scrollable column of pages. Pages are rasterized on demand with poppler's
 // `pdftoppm` into a cache under the app home, and drawn with `image()`.
 //
-// Open one beside the focused pane:
-//   herdr-app do pane.split --direction right --mod pdf-viewer --props '{"file":"/abs/doc.pdf"}'
+// Open one with `view doc.pdf` (bin/view → place.py), which places it and
+// registers it so it can be replaced later.
 
 import { View, div, image } from "gpui-kit";
 import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle } from "gpui-base";
-import { exec, theme, appHome, home, props, nextCommand, watchFolder, run } from "herdr";
+import { exec, theme, appHome, home, props, nextCommand } from "herdr";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 
@@ -22,7 +22,6 @@ const PLACE = () => `${appHome()}/mods/pdf-viewer/place.py`;   // placement and 
 
 const expand = (p) => (p.startsWith("~/") ? home() + p.slice(1) : p);
 const basename = (p) => p.split("/").pop();
-const dirname = (p) => p.slice(0, p.lastIndexOf("/")) || "/";
 
 export default class PdfViewer extends View {
   init(_props, cx) {
@@ -32,13 +31,13 @@ export default class PdfViewer extends View {
     this.zoom = "fit";            // "fit" (fit width) or a number from ZOOMS
     this.visible = { start: 0, end: 1 };
     this.shownPage = 0;
-    this.watching = null;
     this.reset();
 
     const file = props()?.file;
     if (file) this.open(expand(String(file)), cx);
 
     cx.timer.every(150, (cx) => this.pump(cx));
+    cx.timer.every(2000, (cx) => this.checkChanged(cx));
     cx.spawn(async (cx) => {
       for (;;) {
         const c = await nextCommand();
@@ -49,7 +48,7 @@ export default class PdfViewer extends View {
   }
 
   reset() {
-    this.doc = null;              // { file, key, dir, title, pages: [{w, h}] } (pt, rotation applied)
+    this.doc = null;              // { file, dir, title, stamp, pages: [{w, h}] } (pt, rotation applied)
     this.error = null;
     this.ready = new Map();       // `${page}@${dpi}` -> image path
     this.latest = new Map();      // page -> last rendered image path, shown while re-rendering
@@ -69,7 +68,6 @@ export default class PdfViewer extends View {
         const doc = await this.inspect(file);
         if (gen !== this.generation) return;
         this.doc = doc;
-        this.watch(file, cx);
         this.prune();
       } catch (e) {
         if (gen === this.generation) this.error = String(e?.message ?? e);
@@ -102,23 +100,25 @@ export default class PdfViewer extends View {
     const key = createHash("sha1").update(`${file}\0${st.stdout.trim()}`).digest("hex").slice(0, 16);
     const dir = `${CACHE}/${key}`;
     await fs.mkdir(`${appHome()}/${dir}`, { recursive: true });
-    return { file, key, dir, title, stamp: st.stdout.trim(), pages };
+    // Mark the cache as used: prune() goes by the folder's date.
+    await exec("touch", [`${appHome()}/${dir}`]).catch(() => {});
+    return { file, dir, title, stamp: st.stdout.trim(), pages };
   }
 
   // Reload when the file changes on disk (a LaTeX/Typst build, a new export).
-  watch(file, cx) {
-    if (this.watching === file) return;
-    this.watching = file;
+  // A stat poll, not watchFolder: on macOS that watches the parent folder
+  // recursively, which for a PDF in ~ means the whole home.
+  checkChanged(cx) {
+    const doc = this.doc;
+    if (!doc || this.checking) return;
+    this.checking = true;
     cx.spawn(async (cx) => {
-      while (this.watching === file) {
-        try { await watchFolder(dirname(file)); } catch { return; }
-        if (this.watching !== file) return;
-        const st = await exec("stat", ["-f", "%m %z", file]).catch(() => null);
-        if (st?.code === 0 && st.stdout.trim() !== this.doc?.stamp) {
-          const keep = this.shownPage;
-          this.open(file, cx);
-          this.restorePage = keep;
-        }
+      const st = await exec("stat", ["-f", "%m %z", doc.file]).catch(() => null);
+      this.checking = false;
+      if (st?.code === 0 && doc === this.doc && st.stdout.trim() !== doc.stamp) {
+        const keep = this.shownPage;
+        this.open(doc.file, cx);
+        this.restorePage = keep;
       }
     });
   }
@@ -383,7 +383,6 @@ export default class PdfViewer extends View {
   // place.py --closed gives back the terminal this viewer parked, unless the
   // viewer was replaced by another one (which then owns the parked terminal).
   async close() {
-    this.watching = null;
     this.scroll?.release();
     const id = props()?.id;
     if (id) await exec("python3", [PLACE(), "--closed", String(id)]).catch(() => {});

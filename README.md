@@ -59,8 +59,12 @@ Which viewer parked which terminal is recorded in
 `~/.config/herdr-app/data/pdf-viewer/state.json`.
 
 A pane opened without a `file` shows an **Open PDF…** button (macOS file picker).
-If the file changes on disk (a LaTeX or Typst rebuild), the viewer reloads it and
-stays on the same page.
+If the file changes on disk (a LaTeX or Typst rebuild), the viewer reloads it
+within about 2 seconds and stays on the same page.
+
+Open viewers through `view` or the popup: a viewer opened with a bare
+`herdr-app do pane.split --mod pdf-viewer` isn't registered, so a later `view`
+from Claude opens a new pane instead of replacing it.
 
 ### PDFs mentioned in a terminal (Claude Code's links)
 
@@ -99,3 +103,10 @@ and add `"cmd-shift-o": "mod.open:pdf-links"` to the `global` section of
 The same actions can be bound in `keys.json` under `mod:pdf-viewer`, e.g.
 `"ctrl-shift-]": "pdf-viewer.next"` (commands: `next`, `prev`, `first`, `last`,
 `zoom_in`, `zoom_out`, `fit`, `actual`, `reload`, `external`, `pick`).
+
+## Tests
+
+```sh
+node --test tests/                    # PDF path detection in terminal text
+python3 -m unittest discover tests    # placement rules, against a fake window
+```

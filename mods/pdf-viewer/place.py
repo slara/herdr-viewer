@@ -53,7 +53,7 @@ def do(command, **args):
 
 
 class State:
-    """state.json under an exclusive lock: {"viewers": {id: {pane, file, parked, src}}}."""
+    """state.json under an exclusive lock: {"viewers": {id: {pane, tab, file, parked, src}}}."""
 
     def __enter__(self):
         os.makedirs(os.path.dirname(STATE), exist_ok=True)
@@ -108,16 +108,16 @@ def exists(pane):
 
 
 def live_viewers(st, tab):
-    """Registered viewer panes that still exist in `tab`; forgets the ones that are gone."""
+    """Registered viewer panes that still exist in `tab`; forgets the ones that are gone.
+    Only `tab`'s are checked: focusing a pane elsewhere would switch the window to it."""
     found = []
     for vid, v in list(st.viewers.items()):
-        pane = v.get("pane")
-        if not exists(pane):
-            if not v.get("parked"):  # a parked terminal's entry is kept until given back
-                del st.viewers[vid]
+        if v.get("tab") != tab:
             continue
-        if herdr("status").get("tab") == tab:
-            found.append(pane)
+        if exists(v.get("pane")):
+            found.append(v["pane"])
+        elif not v.get("parked"):  # a parked terminal's entry is kept until given back
+            del st.viewers[vid]
     return found
 
 
@@ -181,7 +181,7 @@ def open_doc(path, source, tab):
     if tab:
         made = do("tab.new", name=os.path.basename(path), mod=MOD, props=props)
         with State() as st:
-            st.viewers[vid] = {"pane": made.get("pane"), "file": path}
+            st.viewers[vid] = {"pane": made.get("pane"), "tab": made.get("tab"), "file": path}
         return
 
     panes = terminal_panes()
@@ -189,7 +189,7 @@ def open_doc(path, source, tab):
     if not src_pane:  # not run from a Herdr terminal: beside whatever has focus
         made = do("pane.split", direction="right", mod=MOD, props=props)
         with State() as st:
-            st.viewers[vid] = {"pane": made.get("pane"), "file": path}
+            st.viewers[vid] = {"pane": made.get("pane"), "tab": herdr("status").get("tab"), "file": path}
         return
 
     term, tab_id, agent = panes[src_pane]
@@ -201,7 +201,8 @@ def open_doc(path, source, tab):
                 anchor = neighbour(src_pane, tab_id, panes)
                 props["parked"] = term
                 made = take_place(src_pane, props)
-                st.viewers[vid] = {"pane": made.get("pane"), "file": path, "parked": term, "src": anchor}
+                st.viewers[vid] = {"pane": made.get("pane"), "tab": tab_id, "file": path,
+                                   "parked": term, "src": anchor}
                 do("terminal.park", terminal=term)
                 focus = made.get("pane")
                 return
@@ -211,7 +212,7 @@ def open_doc(path, source, tab):
             if old:  # a viewer: take its place, and whatever it had parked
                 props["parked"] = old.get("parked")
                 made = take_place(right, props)
-                st.viewers[vid] = {"pane": made.get("pane"), "file": path,
+                st.viewers[vid] = {"pane": made.get("pane"), "tab": tab_id, "file": path,
                                    "parked": old.get("parked"), "src": old.get("src")}
                 del st.viewers[old_id]  # before closing it, so its close() gives nothing back
                 do("pane.close", pane=right)
@@ -219,11 +220,15 @@ def open_doc(path, source, tab):
                 parked = panes[right][0]
                 props["parked"] = parked
                 made = take_place(right, props)
-                st.viewers[vid] = {"pane": made.get("pane"), "file": path, "parked": parked, "src": src_pane}
+                st.viewers[vid] = {"pane": made.get("pane"), "tab": tab_id, "file": path,
+                                   "parked": parked, "src": src_pane}
                 do("terminal.park", terminal=parked)
             else:  # nothing there (or a pane that isn't ours): a new pane on the right
+                # shortcut: a viewer not opened through here (a bare `pane.split`) isn't in
+                # state, so it isn't replaced; the CLI can't tell mod panes apart. If that
+                # matters, have the viewer publish its pane via setShared/shared.json.
                 made = do("pane.split", pane=src_pane, direction="right", mod=MOD, props=props)
-                st.viewers[vid] = {"pane": made.get("pane"), "file": path}
+                st.viewers[vid] = {"pane": made.get("pane"), "tab": tab_id, "file": path}
     finally:
         try:
             do("pane.focus", pane=focus)
