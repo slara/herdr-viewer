@@ -11,7 +11,7 @@
 
 import { View, div, image } from "gpui-kit";
 import { v_flex, h_flex, v_virtual_list, Scrollbar, VirtualListScrollHandle, TextView, Editor, EditorState } from "gpui-base";
-import { exec, theme, appHome, home, props, nextCommand, readTextFile, settings } from "herdr";
+import { exec, theme, appHome, home, props, nextCommand, readTextFile, settings, focused, panes, run } from "herdr";
 import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import { isMarkdown, isImage, splitMarkdown, markdownTitle, resolveLink, editorLanguage, svgSize } from "./doc.js";
@@ -46,7 +46,7 @@ export default class PdfViewer extends View {
     const file = props()?.file;
     if (file) this.open(expand(String(file)), cx);
 
-    cx.timer.every(150, (cx) => this.pump(cx));
+    cx.timer.every(150, (cx) => { this.syncFocus(cx); this.pump(cx); });
     cx.timer.every(2000, (cx) => this.checkChanged(cx));
     cx.spawn(async (cx) => {
       for (;;) {
@@ -267,6 +267,45 @@ export default class PdfViewer extends View {
     if (id) exec("python3", [PLACE(), "--restore", String(id)]).catch(() => {});
   }
 
+  // This viewer's pane id. A pane mod isn't told it, but place.py records it in
+  // state.json under the viewer's id. A viewer opened without one counts as
+  // the only viewer in the focused tab.
+  myPane(cx) {
+    if (this.pane) return this.pane;
+    const id = props()?.id;
+    if (!id) {
+      const tab = focused()?.tab;
+      const mine = panes().filter((p) => p.mod === "pdf-viewer" && p.tab === tab);
+      return mine.length === 1 ? mine[0].pane : null;
+    }
+    if (!this.lookingUp) {
+      this.lookingUp = true;
+      cx.spawn(async () => {
+        try {
+          const st = JSON.parse((await readTextFile(`${appHome()}/data/pdf-viewer/state.json`)) ?? "{}");
+          this.pane = st.viewers?.[id]?.pane ?? null;
+        } catch { /* not written yet: the next tick asks again */ }
+        this.lookingUp = false;
+      });
+    }
+    return null;
+  }
+
+  // Herdr focuses the pane on the first click but the mod only hears the
+  // second; take the keyboard as soon as Herdr says this pane has focus.
+  syncFocus(cx) {
+    const pane = focused()?.pane;
+    if (pane && pane === this.myPane(cx) && !this.handle.is_focused()) this.handle.focus();
+  }
+
+  // Ctrl-Q, as in tmdview. The key only reaches the viewer while it has the
+  // keyboard, so the focused pane is this one. Closing it runs close(), which
+  // gives back a parked terminal.
+  closePane() {
+    const pane = focused()?.pane;
+    if (pane && panes().some((p) => p.pane === pane && p.mod === "pdf-viewer")) run("pane.close", { pane });
+  }
+
   openExternally() {
     if (this.file) exec("open", [this.file]).catch(() => {});
   }
@@ -283,7 +322,7 @@ export default class PdfViewer extends View {
 
   command(c, cx) {
     // Pages are a PDF's, zoom a PDF's or an image's; a Markdown view scrolls by itself.
-    const any = ["focus", "reload", "external", "pick"];
+    const any = ["focus", "reload", "external", "pick", "close"];
     const zoom = ["zoom_in", "zoom_out", "fit", "actual"];
     if (this.doc?.blocks && !any.includes(c)) return;
     if (this.doc?.asset && !any.includes(c) && !zoom.includes(c)) return;
@@ -300,6 +339,7 @@ export default class PdfViewer extends View {
       case "reload": if (this.file) this.open(this.file, cx); break;
       case "external": this.openExternally(); break;
       case "pick": this.pickFile(cx); break;
+      case "close": this.closePane(); break;
     }
   }
 
@@ -311,7 +351,7 @@ export default class PdfViewer extends View {
       "+": "zoom_in", "=": "zoom_in", "cmd-=": "zoom_in", "shift-=": "zoom_in",
       "-": "zoom_out", "cmd--": "zoom_out",
       "0": "fit", "cmd-0": "fit", "1": "actual",
-      "r": "reload", "o": "external", "cmd-o": "pick",
+      "r": "reload", "o": "external", "cmd-o": "pick", "ctrl-q": "close",
     };
     const c = map[e.keystroke] ?? map[e.key_char];
     if (!c) return;

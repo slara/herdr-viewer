@@ -90,15 +90,17 @@ Click the viewer first. In a PDF:
 | `r` | reload |
 | `o` | open in the default app |
 | `Cmd-O` | open another document |
+| `Ctrl-Q` | close the viewer |
 
-An image takes the zoom keys (`+` `=` `-` `0` `1`) and `r`, `o`, `Cmd-O`. A
-Markdown page scrolls with the mouse or trackpad; only `r`, `o` and `Cmd-O`
-apply to it.
+An image takes the zoom keys (`+` `=` `-` `0` `1`) and `r`, `o`, `Cmd-O`,
+`Ctrl-Q`. A Markdown page scrolls with the mouse or trackpad; only `r`, `o`,
+`Cmd-O` and `Ctrl-Q` apply to it. Herdr's own `Cmd-Shift-W` closes the viewer
+too. Either way, a terminal it parked comes back.
 
 To bind these elsewhere, use the `mod:pdf-viewer` section of `keys.json`, for
 example `"ctrl-shift-]": "pdf-viewer.next"`. The commands are `next`, `prev`,
-`first`, `last`, `zoom_in`, `zoom_out`, `fit`, `actual`, `reload`, `external`
-and `pick`.
+`first`, `last`, `zoom_in`, `zoom_out`, `fit`, `actual`, `reload`, `external`,
+`pick` and `close`.
 
 ## What it shows
 

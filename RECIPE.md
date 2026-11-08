@@ -42,8 +42,10 @@ one the same way.
   returns to fit-width and keeps the current page. Keys (pane focused): `j n ↓
   → Space PageDown` next page, `k p ↑ ← Shift-Space PageUp` previous, `g Home` /
   `G End` first/last, `+ =` / `-` zoom, `0` fit, `1` 100%, `r` reload, `o` open
-  externally, `Cmd-O` pick a file. An image honours the zoom keys and `r`, `o`, `Cmd-O`;
-  a Markdown page only `r`, `o`, `Cmd-O`.
+  externally, `Cmd-O` pick a file, `Ctrl-Q` close the viewer (the pane in
+  `focused()`, checked to be a `pdf-viewer` in `panes()`). An image honours the
+  zoom keys and `r`, `o`, `Cmd-O`, `Ctrl-Q`; a Markdown page only `r`, `o`,
+  `Cmd-O`, `Ctrl-Q`.
 - Only visible pages plus one either side are rendered; while a new zoom
   renders, the previous image of the page stays up, scaled.
 - The file is checked every 2 seconds; when its size or date changes, the
