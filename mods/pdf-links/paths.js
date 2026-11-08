@@ -1,10 +1,10 @@
-// PDF paths mentioned in terminal text. No Herdr imports, so tests/ can run it with node.
+// PDF and Markdown paths mentioned in terminal text. No Herdr imports, so tests/ can run it with node.
 
 const MAX = 40;         // candidates checked against the disk
 
-// A path ending in .pdf. Agents hard-wrap long paths, so a newline plus the
+// A path ending in .pdf, .md or .markdown. Agents hard-wrap long paths, so a newline plus the
 // next line's indentation may sit inside one; those are removed afterwards.
-const PDF_RE = /(?<![\w.~\/-])(?:file:\/\/)?(?:~|\.{1,2})?\/?(?:[\w.@%+~,=-]|\/|\n[ \t ⎿│]*(?=[\w.@%+~,=\/-]))+?\.pdf\b/gi;
+const DOC_RE = /(?<![\w.~\/-])(?:file:\/\/)?(?:~|\.{1,2})?\/?(?:[\w.@%+~,=-]|\/|\n[ \t ⎿│]*(?=[\w.@%+~,=\/-]))+?\.(?:pdf|md|markdown)\b/gi;
 const BREAK = /\n[ \t ⎿│]*/;
 
 function normalize(p, cwd, home) {
@@ -22,7 +22,7 @@ function normalize(p, cwd, home) {
 export function candidates(text, cwd, home) {
   const seen = new Set();
   const out = [];
-  const found = [...text.matchAll(PDF_RE)].reverse();
+  const found = [...text.matchAll(DOC_RE)].reverse();
   for (const m of found) {
     const parts = m[0].split(BREAK);
     for (let i = 0; i < parts.length; i++) {

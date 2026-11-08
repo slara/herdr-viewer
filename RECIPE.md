@@ -3,8 +3,9 @@
 A document viewer pane. `view file.pdf`, `view file.md` or `view image.png` in
 a terminal opens the file beside it: a PDF as a continuous column of white
 pages on the canvas, a Markdown file as a page of text, highlighted code,
-Mermaid diagrams and images, an image centered and fitted to the pane. A Cmd-Shift-O popup lists the PDFs mentioned in a terminal and opens
-one the same way.
+Mermaid diagrams and images, an image centered and fitted to the pane. A
+Cmd-Shift-O popup lists the PDF and Markdown files mentioned in a terminal and
+opens one the same way.
 
 ![herdr-viewer](preview.png)
 
@@ -31,7 +32,7 @@ one the same way.
   `dim`), then `− 39% +`, `Fit`, `↗`.
 - **Empty pane** (no file): `No document` and an `Open document…` button
   (`solid` background) that opens the macOS file picker for PDF or Markdown.
-- **Popup** (560×360, at the top, 40px down, `popover` background): `Open a PDF
+- **Popup** (560×360, at the top, 40px down, `popover` background): `Open a document
   from this terminal` with `↑↓ Enter · 1–9 · Esc` on the right, then up to 8
   visible 38px rows: number, file name in bold, folder in `dim` with `~` for
   home. The selected row has the `selected` background.
@@ -62,7 +63,8 @@ one the same way.
   keeps that pane's width. Closing the viewer gives the parked terminal back
   beside its old neighbour; `↩ Terminal` gives it back in the viewer's place.
   Focus returns to the asking terminal (or the new viewer, from a shell).
-- The popup reads 2,000 lines of the focused terminal, newest mention first,
+- The popup reads 2,000 lines of the focused terminal for `.pdf`, `.md` and
+  `.markdown` paths (not `.mdx`), newest mention first,
   joins paths an agent wrapped across lines, resolves `~`, `file://` and paths
   relative to the terminal's folder, and lists only files that exist. Enter, a
   click or `1`–`9` opens one; Esc closes.
@@ -133,6 +135,8 @@ one the same way.
 - A pane mod doesn't know its own pane id; that's why `place.py` keeps state.
 - `watchFolder` is recursive on macOS; poll the file's `stat` instead.
 - Herdr's hot reload doesn't follow symlinked mod folders.
+- `hc read` of a program on the alternate screen (Claude Code in fullscreen)
+  returns only the visible screen: there's no scrollback to search.
 - macOS only (`stat -f`, `sips`, `open`, `osascript`, `pbcopy`).
 
 ## Done when

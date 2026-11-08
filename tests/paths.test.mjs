@@ -27,6 +27,11 @@ test("prose glued to a path by a line break still offers the path", () => {
   assert.ok(got.includes(`${HOME}/spec.pdf`), JSON.stringify(got));
 });
 
+test("Markdown files too, but not lookalike extensions", () => {
+  const got = find("see docs/guide.md, ~/notes.markdown and app.mdx or x.mdown");
+  assert.deepEqual(got, [`${HOME}/notes.markdown`, "/work/docs/guide.md"]);
+});
+
 test("no PDFs, no candidates", () => {
-  assert.deepEqual(find("nothing here, not even notes.pdfx"), []);
+  assert.deepEqual(find("nothing here, not even notes.pdfx or a.mdx"), []);
 });

@@ -1,9 +1,9 @@
-// pdf-links: a popup listing the PDF files mentioned in the focused terminal
+// pdf-links: a popup listing the PDF and Markdown files mentioned in the focused terminal
 // (Claude Code's output, a build log, `ls`), newest mention first. Enter or a
 // click opens the chosen one in a pdf-viewer pane beside that terminal.
 //
 // Herdr hands clicked terminal links straight to the system, so this is how a
-// PDF link from an agent reaches the viewer. Bound to a key in keys.json:
+// PDF or Markdown link from an agent reaches the viewer. Bound to a key in keys.json:
 //   "cmd-shift-o": "mod.open:pdf-links"
 
 import { View, div } from "gpui-kit";
@@ -57,7 +57,7 @@ export default class PdfLinks extends View {
     if (this.terminal) args.splice(1, 0, "--from", this.terminal);
     this.close();
     exec("python3", args).then((r) => {
-      if (r.code !== 0) notify({ title: "Cannot open PDF", body: r.stderr.trim(), level: "error" });
+      if (r.code !== 0) notify({ title: "Cannot open document", body: r.stderr.trim(), level: "error" });
     }).catch(() => {});
   }
 
@@ -79,8 +79,8 @@ export default class PdfLinks extends View {
           .child(div().truncate().text_size(11).text_color(t.dim).child(short(p.slice(0, slash)))));
     });
 
-    const message = this.error ?? (this.files === null ? "Looking for PDFs…"
-      : files.length ? null : "No PDF files mentioned in this terminal");
+    const message = this.error ?? (this.files === null ? "Looking for documents…"
+      : files.length ? null : "No PDF or Markdown files mentioned in this terminal");
 
     // The popup sizes to its content, so the list needs a height of its own.
     const listH = Math.min(8, files.length) * 40;
@@ -99,7 +99,7 @@ export default class PdfLinks extends View {
         cx.notify();
       })
       .child(h_flex().items_center().justify_between()
-        .child(div().font_semibold().text_color(t.foreground).child("Open a PDF from this terminal"))
+        .child(div().font_semibold().text_color(t.foreground).child("Open a document from this terminal"))
         .child(div().text_size(11).text_color(t.dim).child("↑↓ Enter · 1–9 · Esc")))
       .child(message
         ? div().h(48).flex_none().flex().items_center().text_color(t.muted).child(message)

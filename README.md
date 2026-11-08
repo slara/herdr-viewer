@@ -38,7 +38,7 @@ herdr-app check ~/.config/herdr-app/mods/pdf-links
 `view` command (vim, read-only); this one only takes PDF, Markdown and image
 files and passes everything else to `/usr/bin/view`, so that keeps working.
 
-For the popup that opens PDFs mentioned in a terminal, add this key to the
+For the popup that opens documents mentioned in a terminal, add this key to the
 `global` section of `~/.config/herdr-app/keys.json` (it's also in this repo's
 `keys.json`):
 
@@ -64,16 +64,19 @@ When the file changes on disk (a LaTeX or Typst rebuild, a save in your
 editor), the viewer reloads it within about 2 seconds; a PDF stays on the same
 page. The toolbar's **↗** opens the file in its default app.
 
-### Opening a PDF an agent mentioned
+### Opening a document an agent mentioned
 
 Herdr hands clicked terminal links straight to macOS, which opens Preview, and
 a mod can't intercept the click. Instead, press **Cmd-Shift-O** in the terminal:
-a popup lists the PDF files mentioned in its output and scrollback, newest
-first. Enter, a click or `1`–`9` opens one, placed the same way `view` places it.
+a popup lists the PDF and Markdown files (`.md`, `.markdown`) mentioned in its
+output and scrollback, newest first. Enter, a click or `1`–`9` opens one, placed
+the same way `view` places it.
 
 It finds absolute paths, `~/…`, `file://` URLs and names relative to the
 terminal's folder, including paths an agent wrapped over two lines. Only files
-that exist are listed. Paths with spaces aren't detected.
+that exist are listed. Paths with spaces aren't detected. A program on the
+terminal's alternate screen, such as Claude Code in fullscreen mode, has no
+scrollback, so only what's on screen is searched.
 
 ### Keys
 
