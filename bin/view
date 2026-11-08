@@ -4,7 +4,7 @@
 # Anything else (other files, options, no Herdr) goes to the system's `view` (vim -R).
 set -eu
 
-place="${HERDR_APP_HOME:-$HOME/.config/herdr-app}/mods/pdf-viewer/place.py"
+place="${HERDR_APP_HOME:-$HOME/.config/herdr-app}/mods/viewer/place.py"
 
 tab=
 [ "${1:-}" = "--tab" ] && { tab=--tab; shift; }

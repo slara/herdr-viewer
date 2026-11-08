@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Open a document in a pdf-viewer pane, placed beside the terminal that asked.
+"""Open a document in a viewer pane, placed beside the terminal that asked.
 
   place.py [--from tN] [--tab] FILE   open FILE
   place.py --closed ID                a viewer closed: give back the terminal it parked
@@ -15,7 +15,7 @@ Closing a viewer puts the parked terminal back beside its neighbour; the
 viewer's "↩ Terminal" button puts it back in the viewer's place.
 
 State (viewer panes, parked terminals) is kept in
-~/.config/herdr-app/data/pdf-viewer/state.json.
+~/.config/herdr-app/data/viewer/state.json.
 """
 
 import argparse
@@ -28,8 +28,8 @@ import time
 import uuid
 
 HOME = os.environ.get("HERDR_APP_HOME") or os.path.expanduser("~/.config/herdr-app")
-STATE = os.path.join(HOME, "data", "pdf-viewer", "state.json")
-MOD = "pdf-viewer"
+STATE = os.path.join(HOME, "data", "viewer", "state.json")
+MOD = "viewer"
 
 
 class HerdrError(Exception):
@@ -224,9 +224,8 @@ def open_doc(path, source, tab):
                                    "parked": parked, "src": src_pane}
                 do("terminal.park", terminal=parked)
             else:  # nothing there (or a pane that isn't ours): a new pane on the right
-                # shortcut: a viewer not opened through here (a bare `pane.split`) isn't in
-                # state, so it isn't replaced; the CLI can't tell mod panes apart. If that
-                # matters, have the viewer publish its pane via setShared/shared.json.
+                # A viewer opened another way (a bare `pane.split`) isn't in state,
+                # so it isn't replaced: from the CLI, mod panes all look alike.
                 made = do("pane.split", pane=src_pane, direction="right", mod=MOD, props=props)
                 st.viewers[vid] = {"pane": made.get("pane"), "tab": tab_id, "file": path}
     finally:
@@ -280,8 +279,8 @@ def restore(vid):
             return
         term, pane = v.get("parked"), v.get("pane")
         if term and pane and exists(pane) and not pane_of(term):
-            # Same trick as take_place: the terminal comes back right of the
-            # viewer, swaps to its left, and gets the viewer's space when it closes.
+            # As in take_place: the terminal comes back right of the viewer,
+            # swaps to its left, and gets the viewer's space when it closes.
             keep_beside(term, pane)
             back = pane_of(term)
             for _ in range(15):

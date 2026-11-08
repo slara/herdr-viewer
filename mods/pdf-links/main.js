@@ -1,6 +1,6 @@
 // pdf-links: a popup listing the PDF and Markdown files mentioned in the focused terminal
 // (Claude Code's output, a build log, `ls`), newest mention first. Enter or a
-// click opens the chosen one in a pdf-viewer pane beside that terminal.
+// click opens the chosen one in a viewer pane beside that terminal.
 //
 // Herdr hands clicked terminal links straight to the system, so this is how a
 // PDF or Markdown link from an agent reaches the viewer. Bound to a key in keys.json:
@@ -53,7 +53,7 @@ export default class PdfLinks extends View {
   // place of a viewer or a terminal already on its right). It runs as its own
   // process, so closing the popup right after doesn't cut it short.
   open(file) {
-    const args = [`${appHome()}/mods/pdf-viewer/place.py`, file];
+    const args = [`${appHome()}/mods/viewer/place.py`, file];
     if (this.terminal) args.splice(1, 0, "--from", this.terminal);
     this.close();
     exec("python3", args).then((r) => {

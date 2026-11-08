@@ -23,7 +23,7 @@ test("a path an agent wrapped over two lines", () => {
 });
 
 test("prose glued to a path by a line break still offers the path", () => {
-  const got = find("abrí tu\n  ~/spec.pdf ayer");
+  const got = find("then open\n  ~/spec.pdf later");
   assert.ok(got.includes(`${HOME}/spec.pdf`), JSON.stringify(got));
 });
 

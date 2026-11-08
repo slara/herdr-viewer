@@ -27,10 +27,10 @@ images, and an image fitted to the pane.
 ```sh
 git clone https://github.com/slara/herdr-viewer
 cd herdr-viewer
-ln -s "$PWD/mods/pdf-viewer" ~/.config/herdr-app/mods/pdf-viewer
+ln -s "$PWD/mods/viewer" ~/.config/herdr-app/mods/viewer
 ln -s "$PWD/mods/pdf-links"  ~/.config/herdr-app/mods/pdf-links
 ln -s "$PWD/bin/view" ~/.local/bin/view
-herdr-app check ~/.config/herdr-app/mods/pdf-viewer
+herdr-app check ~/.config/herdr-app/mods/viewer
 herdr-app check ~/.config/herdr-app/mods/pdf-links
 ```
 
@@ -100,8 +100,8 @@ An image takes the zoom keys (`+` `=` `-` `0` `1`) and `r`, `o`, `Cmd-O`,
 `Cmd-O` and `Ctrl-Q` apply to it. Herdr's own `Cmd-Shift-W` closes the viewer
 too. Either way, a terminal it parked comes back.
 
-To bind these elsewhere, use the `mod:pdf-viewer` section of `keys.json`, for
-example `"ctrl-shift-]": "pdf-viewer.next"`. The commands are `next`, `prev`,
+To bind these elsewhere, use the `mod:viewer` section of `keys.json`, for
+example `"ctrl-shift-]": "viewer.next"`. The commands are `next`, `prev`,
 `first`, `last`, `zoom_in`, `zoom_out`, `fit`, `actual`, `reload`, `external`,
 `pick` and `close`.
 
@@ -110,16 +110,14 @@ example `"ctrl-shift-]": "pdf-viewer.next"`. The commands are `next`, `prev`,
 ### PDF
 
 Pages show as one continuous column, fitted to the pane's width, with page
-navigation and zoom. Only the visible pages and one on either side are
-rendered, so a long document doesn't render every page up front.
+navigation and zoom. Pages are rendered as they come into view, plus one on
+either side.
 
 ### Images
 
 PNG, JPEG, GIF, WebP, BMP and SVG. The image is centered and shrunk to fit the
 pane, never enlarged; the toolbar shows its size in pixels and the zoom, and
-past the pane's size it scrolls both ways. Like Markdown images, it's copied
-to `~/.config/herdr-app/data/pdf-viewer/md/` first, since a mod can only draw
-images from Herdr's folder.
+past the pane's size it scrolls both ways.
 
 ### Markdown
 
@@ -147,11 +145,8 @@ Not shown: remote (https) images, images inside a paragraph, math, and
 > the code out of sight; the block snaps back when the wheel stops. Herdr's code
 > editor owns the wheel and mods can't turn that off yet.
 
-This is the native counterpart of
-[tmdview](https://github.com/slara/terminal-markdown-renderer), which renders
-Markdown in a browser inside the terminal. tmdview's plugins are JavaScript for
-a browser, so they don't run here; the viewer does their job with Herdr's own
-pieces instead.
+For Markdown rendered by a browser inside the terminal, with JavaScript
+plugins, see [tmdview](https://github.com/slara/terminal-markdown-renderer).
 
 ## Where the viewer opens
 
@@ -171,7 +166,7 @@ closing the viewer puts it back beside its old neighbour.
 While a terminal is parked, Herdr doesn't protect it from a herdr-core crash.
 
 Open viewers with `view` or the popup. A viewer opened with a bare
-`herdr-app do pane.split --mod pdf-viewer` isn't registered, so a later `view`
+`herdr-app do pane.split --mod viewer` isn't registered, so a later `view`
 from an agent opens a new pane instead of replacing it.
 
 ## How it works
@@ -185,22 +180,22 @@ view. So:
   with Herdr's own element for it.
 - **Images** are copied under Herdr's folder and drawn with its image element,
   sized from the SVG's `viewBox` or from `sips`.
-- **Placement** is a Python script, `mods/pdf-viewer/place.py`, that drives
+- **Placement** is a Python script, `mods/viewer/place.py`, that drives
   `herdr-app do`. It finds the neighbouring pane with `pane.go`; when the
   window hasn't drawn the panes yet, the tab's pane order (left first) decides.
   It records which viewer parked which terminal in
-  `~/.config/herdr-app/data/pdf-viewer/state.json`.
+  `~/.config/herdr-app/data/viewer/state.json`.
 
-Rendered pages are cached in `~/.config/herdr-app/data/pdf-viewer/<hash>/`, and
+Rendered pages are cached in `~/.config/herdr-app/data/viewer/<hash>/`, and
 a document's cache is deleted after 14 days unused. Diagrams and copies of
-Markdown images go to `~/.config/herdr-app/data/pdf-viewer/md/`, since a mod can
-only draw images from Herdr's folder; that folder isn't cleaned automatically.
+images go to `~/.config/herdr-app/data/viewer/md/`, since a mod can only draw
+images from Herdr's folder; that folder isn't cleaned automatically.
 
 ## Uninstall
 
 ```sh
-rm ~/.config/herdr-app/mods/pdf-viewer ~/.config/herdr-app/mods/pdf-links ~/.local/bin/view
-rm -r ~/.config/herdr-app/data/pdf-viewer
+rm ~/.config/herdr-app/mods/viewer ~/.config/herdr-app/mods/pdf-links ~/.local/bin/view
+rm -r ~/.config/herdr-app/data/viewer
 ```
 
 Then remove the `cmd-shift-o` line from `~/.config/herdr-app/keys.json`.
@@ -210,7 +205,7 @@ Then remove the `cmd-shift-o` line from `~/.config/herdr-app/keys.json`.
 ```sh
 node --test tests/                    # path detection, Markdown blocks, front matter and links
 python3 -m unittest discover tests    # placement rules, against a fake window
-herdr-app check ~/.config/herdr-app/mods/pdf-viewer
+herdr-app check ~/.config/herdr-app/mods/viewer
 ```
 
 The mods load from this folder through the symlinks, but Herdr's hot reload
@@ -219,9 +214,4 @@ new code. The rendering itself is only tested by hand, in Herdr.
 
 ## License
 
-Licensed under either of these, at your option:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-
-Unless you say otherwise, any contribution you submit for inclusion in this work, as defined in the Apache-2.0 license, is dual licensed as above, with no extra terms or conditions.
+[MIT](LICENSE)

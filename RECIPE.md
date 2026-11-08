@@ -44,7 +44,7 @@ opens one the same way.
   → Space PageDown` next page, `k p ↑ ← Shift-Space PageUp` previous, `g Home` /
   `G End` first/last, `+ =` / `-` zoom, `0` fit, `1` 100%, `r` reload, `o` open
   externally, `Cmd-O` pick a file, `Ctrl-Q` close the viewer (the pane in
-  `focused()`, checked to be a `pdf-viewer` in `panes()`). An image honours the
+  `focused()`, checked to be a `viewer` in `panes()`). An image honours the
   zoom keys and `r`, `o`, `Cmd-O`, `Ctrl-Q`; a Markdown page only `r`, `o`,
   `Cmd-O`, `Ctrl-Q`.
 - Only visible pages plus one either side are rendered; while a new zoom
@@ -71,14 +71,14 @@ opens one the same way.
 
 ## Built from
 
-- **Mods:** `mods/pdf-viewer` (`mod.json`: `{"place": "none", "focusable":
-  true}`), a pane mod opened with `pane.split {mod: "pdf-viewer", props: {file,
+- **Mods:** `mods/viewer` (`mod.json`: `{"place": "none", "focusable":
+  true}`), a pane mod opened with `pane.split {mod: "viewer", props: {file,
   id, parked?}}`; `mods/pdf-links` (`{"place": "none", "overlay": {"kind":
   "popup", "at": "top", "offset": 40, "width": 560, "height": 360}}`), opened by
   `mod.open:pdf-links` on `cmd-shift-o`.
 - **PDF:** `pdfinfo -f 1 -l 100000` for page sizes (rotation applied) and title;
   `pdftoppm -png -r <dpi> -f n -l n -singlefile` per page into
-  `data/pdf-viewer/<sha1 of path+mtime+size>/p<n>-<dpi>.png`, written to a
+  `data/viewer/<sha1 of path+mtime+size>/p<n>-<dpi>.png`, written to a
   temp name and moved into place. DPI = scale × 72 × 2, rounded to 24, clamped
   48–600. Pages are a `v_virtual_list` with per-page heights and a
   `VirtualListScrollHandle`; a 150ms timer reads the visible range the
@@ -91,14 +91,14 @@ opens one the same way.
   with fence names mapped to extensions (`rust`→`rs`, `bash`→`sh`, …); Copy uses
   `cx.write_to_clipboard`, falling back to `pbcopy`. Mermaid: `mmdc -i x.mmd -o
   x.svg -t dark|default -b transparent -c {"htmlLabels": false}`, cached by
-  sha1 of source and theme. Images: copied to `data/pdf-viewer/md/`, size from
+  sha1 of source and theme. Images: copied to `data/viewer/md/`, size from
   the SVG `viewBox` or `sips -g pixelWidth -g pixelHeight`, drawn with
   `image()`.
 - **Placement** (`place.py`, run by `bin/view`, the popup and the viewer's
   `close()`): `herdr-app ls`, `herdr-app status`, `herdr-app do` with
   `pane.focus`, `pane.go` (to find neighbours), `pane.split`, `pane.swap`,
   `pane.close`, `terminal.park`, `terminal.keep`, `tab.new`. State in
-  `data/pdf-viewer/state.json` under `fcntl` lock: viewer id → pane, tab, file,
+  `data/viewer/state.json` under `fcntl` lock: viewer id → pane, tab, file,
   parked terminal, anchor pane.
 - **Image:** the same copy-and-size path as Markdown images; fit scale is
   `min(1, (width − 36) / w, (height − 32 − 36) / h)`, from the root's

@@ -1,10 +1,10 @@
-// pdf-viewer: a document viewer pane for Herdr. Shows a PDF as a continuous,
+// viewer: a document viewer pane for Herdr. Shows a PDF as a continuous,
 // scrollable column of pages. Pages are rasterized on demand with poppler's
 // `pdftoppm` into a cache under the app home, and drawn with `image()`.
 // An image is shown on its own, fitted to the pane. A Markdown file is drawn
-// natively, block by block: text with TextView, code
-// with the read-only Editor (highlighting, copy), Mermaid diagrams rendered to
-// SVG by `mmdc`, and images, all with gpui's own elements.
+// block by block with gpui's own elements: text with TextView, code with the
+// read-only Editor (highlighting, copy), Mermaid diagrams rendered to SVG by
+// `mmdc`, and images.
 //
 // Open one with `view doc.pdf` (bin/view → place.py), which places it and
 // registers it so it can be replaced later.
@@ -16,7 +16,7 @@ import { createHash } from "crypto";
 import * as fs from "fs/promises";
 import { isMarkdown, isImage, splitMarkdown, markdownTitle, resolveLink, editorLanguage, svgSize } from "./doc.js";
 
-const CACHE = "data/pdf-viewer";   // relative to appHome(); image() resolves from there
+const CACHE = "data/viewer";   // relative to appHome(); image() resolves from there
 const GAP = 14;                    // px between pages
 const PAD = 18;                    // px around the page column
 const TOOLBAR = 32;                // px, the toolbar's height
@@ -27,7 +27,7 @@ const CACHE_DAYS = 14;
 const ASSETS = `${CACHE}/md`;      // Mermaid SVGs and copies of a Markdown file's images
 const MD_WIDTH = 880;              // px, the Markdown page column
 const CODE_LINE = 20;              // px per line of a code block (Editor at 13 px)
-const PLACE = () => `${appHome()}/mods/pdf-viewer/place.py`;   // placement and parked terminals
+const PLACE = () => `${appHome()}/mods/viewer/place.py`;   // placement and parked terminals
 
 const expand = (p) => (p.startsWith("~/") ? home() + p.slice(1) : p);
 const basename = (p) => p.split("/").pop();
@@ -230,7 +230,7 @@ export default class PdfViewer extends View {
           this.latest.set(page, rel);
         }
       } catch (e) {
-        console.log(`pdf-viewer: page ${page + 1} failed: ${e?.message ?? e}`);
+        console.log(`viewer: page ${page + 1} failed: ${e?.message ?? e}`);
         if (gen === this.generation) this.failed.add(`${page}@${dpi}`);
       }
       this.busy = false;
@@ -275,14 +275,14 @@ export default class PdfViewer extends View {
     const id = props()?.id;
     if (!id) {
       const tab = focused()?.tab;
-      const mine = panes().filter((p) => p.mod === "pdf-viewer" && p.tab === tab);
+      const mine = panes().filter((p) => p.mod === "viewer" && p.tab === tab);
       return mine.length === 1 ? mine[0].pane : null;
     }
     if (!this.lookingUp) {
       this.lookingUp = true;
       cx.spawn(async () => {
         try {
-          const st = JSON.parse((await readTextFile(`${appHome()}/data/pdf-viewer/state.json`)) ?? "{}");
+          const st = JSON.parse((await readTextFile(`${appHome()}/data/viewer/state.json`)) ?? "{}");
           this.pane = st.viewers?.[id]?.pane ?? null;
         } catch { /* not written yet: the next tick asks again */ }
         this.lookingUp = false;
@@ -298,12 +298,12 @@ export default class PdfViewer extends View {
     if (pane && pane === this.myPane(cx) && !this.handle.is_focused()) this.handle.focus();
   }
 
-  // Ctrl-Q, as in tmdview. The key only reaches the viewer while it has the
+  // Ctrl-Q. The key only reaches the viewer while it has the
   // keyboard, so the focused pane is this one. Closing it runs close(), which
   // gives back a parked terminal.
   closePane() {
     const pane = focused()?.pane;
-    if (pane && panes().some((p) => p.pane === pane && p.mod === "pdf-viewer")) run("pane.close", { pane });
+    if (pane && panes().some((p) => p.pane === pane && p.mod === "viewer")) run("pane.close", { pane });
   }
 
   openExternally() {
@@ -436,8 +436,8 @@ export default class PdfViewer extends View {
 
   // The Editor scrolls itself (past its last line too) and keeps the wheel, so
   // a block can scroll its code out of sight. A fresh editor puts it back once
-  // the wheel stops. shortcut: the page still doesn't scroll over a code block;
-  // fix for real if gpui-kit gets a way to turn the Editor's scrolling off.
+  // the wheel stops. The page still doesn't scroll while the pointer is over a
+  // code block: gpui-kit has no option to turn the Editor's scrolling off.
   snapBack(b, cx) {
     const n = (b.wheel = (b.wheel ?? 0) + 1);
     cx.timer.after(400, (cx) => {
@@ -508,9 +508,9 @@ export default class PdfViewer extends View {
     cx.timer.after(1500, (cx) => { if (this.copied === i) { this.copied = null; cx.notify(); } });
   }
 
-  // A clicked link: Markdown and PDFs open here, the web in the browser, other
-  // files in their default app.
-  // shortcut: overriding the click also drops TextView's own #anchor jumps; restore them if headings get ids.
+  // A clicked link: Markdown, PDFs and images open here, the web in the browser,
+  // other files in their default app. Handling the click ourselves turns off
+  // TextView's own #anchor jumps.
   followLink(url, cx) {
     const { kind, target } = resolveLink(url, this.doc.file);
     if (kind === "doc") this.open(target, cx);

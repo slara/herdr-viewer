@@ -6,10 +6,10 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "mods", "pdf-viewer"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "mods", "viewer"))
 import place  # noqa: E402
 
-CLAUDE, SHELL, VIEWER, NEW = "pClaude", "pShell", "pViewer", "pNew"
+AGENT, SHELL, VIEWER, NEW = "pAgent", "pShell", "pViewer", "pNew"
 
 
 class FakeWindow:
@@ -60,39 +60,39 @@ class PlaceTest(unittest.TestCase):
                 if c in ("take_place", "pane.split", "pane.close", "terminal.park")]
 
     def test_from_a_shell_the_viewer_takes_its_place(self):
-        win = FakeWindow({CLAUDE: ("t2", "tab", True), SHELL: ("t5", "tab", False)}, right={CLAUDE: SHELL})
+        win = FakeWindow({AGENT: ("t2", "tab", True), SHELL: ("t5", "tab", False)}, right={AGENT: SHELL})
         state = self.run_place(win, "t5")
         self.assertEqual(self.commands(win), [("take_place", SHELL), ("terminal.park", "t5")])
         (v,) = state.values()
-        self.assertEqual((v["parked"], v["src"]), ("t5", CLAUDE))
+        self.assertEqual((v["parked"], v["src"]), ("t5", AGENT))
 
-    def test_from_claude_alone_a_new_pane_opens(self):
-        win = FakeWindow({CLAUDE: ("t2", "tab", True)})
+    def test_from_an_agent_alone_a_new_pane_opens(self):
+        win = FakeWindow({AGENT: ("t2", "tab", True)})
         self.run_place(win, "t2")
-        self.assertEqual(self.commands(win), [("pane.split", CLAUDE)])
+        self.assertEqual(self.commands(win), [("pane.split", AGENT)])
 
-    def test_from_claude_a_terminal_on_the_right_is_parked(self):
-        win = FakeWindow({CLAUDE: ("t2", "tab", True), SHELL: ("t5", "tab", False)}, right={CLAUDE: SHELL})
+    def test_from_an_agent_a_terminal_on_the_right_is_parked(self):
+        win = FakeWindow({AGENT: ("t2", "tab", True), SHELL: ("t5", "tab", False)}, right={AGENT: SHELL})
         state = self.run_place(win, "t2")
         self.assertEqual(self.commands(win), [("take_place", SHELL), ("terminal.park", "t5")])
-        self.assertEqual(list(state.values())[0]["src"], CLAUDE)
+        self.assertEqual(list(state.values())[0]["src"], AGENT)
 
-    def test_from_claude_a_viewer_on_the_right_is_replaced(self):
-        win = FakeWindow({CLAUDE: ("t2", "tab", True)}, right={CLAUDE: VIEWER})
-        old = {"old": {"pane": VIEWER, "tab": "tab", "file": "/a.pdf", "parked": "t5", "src": CLAUDE}}
+    def test_from_an_agent_a_viewer_on_the_right_is_replaced(self):
+        win = FakeWindow({AGENT: ("t2", "tab", True)}, right={AGENT: VIEWER})
+        old = {"old": {"pane": VIEWER, "tab": "tab", "file": "/a.pdf", "parked": "t5", "src": AGENT}}
         state = self.run_place(win, "t2", viewers=old)
         self.assertEqual(self.commands(win), [("take_place", VIEWER), ("pane.close", VIEWER)])
         self.assertNotIn("old", state)  # removed before the close, so its close() gives nothing back
         self.assertEqual(list(state.values())[0]["parked"], "t5")  # the new viewer owns the parked shell
 
     def test_undrawn_window_uses_pane_order(self):
-        win = FakeWindow({CLAUDE: ("t2", "tab", True), SHELL: ("t5", "tab", False)})  # no geometry
+        win = FakeWindow({AGENT: ("t2", "tab", True), SHELL: ("t5", "tab", False)})  # no geometry
         self.run_place(win, "t2")
         self.assertEqual(self.commands(win), [("take_place", SHELL), ("terminal.park", "t5")])
 
     def test_viewers_in_other_tabs_are_not_checked(self):
         checked = []
-        win = FakeWindow({CLAUDE: ("t2", "tab", True)})
+        win = FakeWindow({AGENT: ("t2", "tab", True)})
         other = {"x": {"pane": "pElsewhere", "tab": "other", "file": "/a.pdf"}}
         with open(place.STATE, "w") as f:
             json.dump({"viewers": other}, f)

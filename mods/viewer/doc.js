@@ -6,7 +6,7 @@ export const isPdf = (path) => /\.pdf$/i.test(path);
 // The formats image() draws.
 export const isImage = (path) => /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(path);
 
-// Front matter (`---` YAML or `+++` TOML at the very top) isn't shown, as in tmdview.
+// Front matter (`---` YAML or `+++` TOML at the very top) isn't shown.
 export function stripFrontMatter(text) {
   const m = text.match(/^(---|\+\+\+)[ \t]*\r?\n[\s\S]*?\r?\n\1[ \t]*(?:\r?\n|$)/);
   return m ? text.slice(m[0].length) : text;

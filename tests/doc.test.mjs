@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { isMarkdown, isImage, stripFrontMatter, labelAlerts, splitMarkdown, svgSize, editorLanguage, markdownTitle, resolveLink }
-  from "../mods/pdf-viewer/doc.js";
+  from "../mods/viewer/doc.js";
 
 test("markdown extensions", () => {
   assert.ok(isMarkdown("/a/README.md") && isMarkdown("x.MARKDOWN"));
