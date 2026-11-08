@@ -7,16 +7,17 @@ the macOS side, and a shell script for the `view` command.
 
 ## The constraint everything follows from
 
-Herdr mods are JavaScript that describe native GPUI elements. There is no web
-view, no HTML or CSS, and a mod can only draw images that live under Herdr's own
-folder (`~/.config/herdr-app`). A mod also can't find out its own pane id, and
-it can't intercept a click on a terminal link.
+Herdr mods are JavaScript that describe elements of GPUI, the native UI toolkit
+Herdr is built on. There is no web view, no HTML or CSS, and a mod can only draw
+images that live under Herdr's own folder (`~/.config/herdr-app`). A mod also
+can't find out its own pane id, and it can't intercept a click on a terminal
+link.
 
 So:
 
 - PDF pages are rasterized to PNG by poppler's `pdftoppm` and drawn as images.
-- Markdown is split into blocks, and each block is drawn with the native
-  element that fits it.
+- Markdown is split into blocks, and each block is drawn with the native element
+  that fits it.
 - Every image the viewer shows is first copied under Herdr's folder.
 - Placing panes is done from outside the mod, by a Python script that drives
   `herdr-app do` and keeps its own record of which pane is which viewer.
@@ -25,18 +26,23 @@ So:
 
 ## What happens when you run `view spec.pdf`
 
-1. `bin/view` asks `router.py kind spec.pdf` whether the viewer shows that
-   file. If not, it runs the system's `/usr/bin/view` (vim) instead.
-2. Inside Herdr (`$HC_TERMINAL_ID` is set), it runs `place.py spec.pdf`.
+1. `bin/view` asks `router.py kind spec.pdf` whether the viewer shows that file.
+   If not, it runs the system's `/usr/bin/view` (vim) instead.
+2. Inside Herdr (`$HC_TERMINAL_ID` is set), `bin/view` runs `place.py spec.pdf`.
 3. `place.py` finds the terminal it was run from in `herdr-app ls`, decides
    where the viewer goes (see [Placement](#placement)), and opens a pane with
    `herdr-app do pane.split {mod: "viewer", props: {file, id, parked}}`.
-4. It records the new viewer in `data/viewer/state.json`, and parks the
-   terminal the viewer replaced, if any.
-5. Herdr starts the `viewer` mod in that pane. It runs `pdfinfo` for the page
-   sizes, and a timer renders the pages that come into view with `pdftoppm`.
-6. Every 2 seconds the viewer checks the file's date and size. When they
-   change, it reloads the document and stays on the same page.
+4. `place.py` records the new viewer in `data/viewer/state.json`. If the viewer
+   took a terminal's place, it parks that terminal: removes its pane but keeps
+   it running, so it can come back later.
+5. Herdr starts the `viewer` mod in that pane. The mod runs `pdfinfo` for the
+   page sizes, and a timer renders the pages that come into view with
+   `pdftoppm`.
+6. Every 2 seconds the viewer checks the file's date and size. When they change,
+   it reloads the document and stays on the same page.
+
+The other two ways in, Cmd-click and the Cmd-Shift-O popup (both described
+below), end at the same script:
 
 ```mermaid
 flowchart LR
@@ -81,9 +87,9 @@ extension in `doc.js`:
 visible range. A 150 ms timer reads that range and renders one missing page at a
 time: the visible ones, then one on either side. The resolution follows the zoom
 for a 2× (Retina) screen, rounded to steps of 24 dpi so a resize doesn't
-re-render every page. Each PNG is written under a temporary name and moved into place, so
-the image loader never reads half a file. While a page re-renders at a new zoom,
-the previous image stays up, scaled.
+re-render every page. Each PNG is written under a temporary name and moved into
+place, so the image loader never reads half a file. While a page re-renders at a
+new zoom, the previous image stays up, scaled.
 
 **Markdown blocks.** `splitMarkdown` cuts the text at fenced code blocks and at
 images on a line of their own:
@@ -109,8 +115,8 @@ because opening it could run it.
 
 `place.py` decides where a viewer goes, from the terminal that asked:
 
-- **A plain terminal (a shell):** the viewer takes that terminal's place, and the
-  terminal is parked with `terminal.park` (off screen, still running).
+- **A plain terminal (a shell):** the viewer takes that terminal's place, and
+  the terminal is parked with `terminal.park` (off screen, still running).
 - **An agent** (a terminal Herdr reports an `app` or a status for): the viewer
   takes the place of the pane on the agent's right. A viewer there is replaced;
   a terminal there is parked. With nothing on the right, the agent's pane is
@@ -119,7 +125,8 @@ because opening it could run it.
 **Finding the pane on the right.** Herdr has no geometry API, so `place.py`
 moves focus with `pane.go right` and reads which pane got it. A pane gets
 geometry only once the window has drawn it, so when the window is in the
-background `pane.go` finds nothing. Then the tab's pane order, left first, decides.
+background `pane.go` finds nothing. Then the tab's pane order, left first,
+decides.
 
 **Keeping the width.** Splitting a pane halves it, and when a pane closes its
 space goes to the pane before it. To take a pane's full width, the viewer is
@@ -127,18 +134,19 @@ split off to its right, swapped to its left with `pane.swap`, and then the old
 pane is closed or parked, so its space goes to the viewer. `pane.swap` also
 needs drawn geometry, so it waits for the new pane to appear beside the old one.
 
-**Giving terminals back.** When a viewer closes, its `close()` runs
-`place.py --closed <id>`, which puts the parked terminal back beside the pane
-recorded with it, or as a new tab if that pane is gone. The ↩ Terminal button
-runs `place.py --restore <id>`, which puts it back in the viewer's place, with
-the same swap.
+**Giving terminals back.** When a viewer closes, its `close()` runs `place.py
+--closed <id>`, which puts the parked terminal back beside the pane recorded
+with it, or as a new tab if that pane is gone. The ↩ Terminal button runs
+`place.py --restore <id>`, which puts it back in the viewer's place, with the
+same swap.
 
 **State.** `data/viewer/state.json` maps each viewer's id to its pane, tab,
-file, parked terminal and anchor pane. It's read and written under an `fcntl`
-lock, because a viewer closing runs `place.py --closed` while another
-`place.py` may be replacing it. When one viewer replaces another, the old entry
-is deleted before the old pane closes, so its `close()` finds nothing to give
-back and the new viewer inherits the parked terminal.
+file, parked terminal and anchor: the pane to put that terminal back beside.
+It's read and written under an `fcntl` lock, because a viewer closing runs
+`place.py --closed` while another `place.py` may be replacing it. When one
+viewer replaces another, the old entry is deleted before the old pane closes, so
+its `close()` finds nothing to give back and the new viewer inherits the parked
+terminal.
 
 ## Cmd-click
 
@@ -147,7 +155,8 @@ app for its type. `router.py install`:
 
 1. compiles `shim.swift` into `~/Applications/Herdr Viewer.app`, writes its
    `Info.plist` (background-only, claims PDF, Markdown and image types), signs
-   it ad hoc and registers it with Launch Services;
+   it ad hoc and registers it with Launch Services, the macOS service that
+   tracks which app opens which file type;
 2. saves the current default app for each type in `state.json`;
 3. makes the shim the default for each type.
 
@@ -156,10 +165,12 @@ runs `router.py open --front <bundle id> <files>`. If that app is Herdr, the
 file opens with `place.py`'s rules from the focused terminal. Otherwise it goes
 to the saved previous app, so Finder and other apps behave as before.
 
-macOS takes default-app changes from different APIs depending on direction: an
-app can make itself the default through `NSWorkspace`, and give a type to
-another app through `LSSetDefaultRoleHandlerForContentType`. Each one fails or
-does nothing in the other case, so the shim's `set` uses both.
+macOS takes default-app changes from different APIs depending on direction. An
+app can make itself the default through `NSWorkspace`, but naming another app
+there fails ("The file couldn't be opened").
+`LSSetDefaultRoleHandlerForContentType` gives a type to another app, but when an
+app names itself it reports success and changes nothing. So the shim's `set`
+uses `NSWorkspace` to claim a type and the C function to give one back.
 
 The viewer's ↗ button also goes through `router.py`, because with the shim
 installed a plain `open` would come straight back to the viewer.
@@ -189,23 +200,24 @@ Everything lives under `~/.config/herdr-app/data/viewer/`:
 ## Design choices
 
 - **A stat poll, not a file watcher.** Herdr's `watchFolder` is recursive on
-  macOS: watching the folder of a PDF in your home would watch the whole home.
-  A `stat` every 2 seconds costs one small process.
+  macOS: watching the folder of a PDF in your home would watch the whole home. A
+  `stat` every 2 seconds costs one small process.
 - **Placement in Python, not in the mod.** The mod can't learn its own pane id,
-  and placement needs several `herdr-app` round trips with waits in between.
-  A script also serves `view`, the popup and Cmd-click alike.
+  and placement needs several `herdr-app` round trips with waits in between. A
+  script also serves `view`, the popup and Cmd-click alike.
 - **A thin shim.** All the Cmd-click logic is in `router.py`, next to
-  `place.py`, where it's tested. The Swift side only receives events and
-  calls Launch Services.
-- **Native blocks over a browser.** A terminal browser can render HTML with
-  JavaScript plugins, but in Herdr it's slow. Native elements are fast, at the
-  cost of what they can't do.
+  `place.py`, where it's tested. The Swift side only receives events and calls
+  Launch Services.
+- **Native blocks over a browser.** A browser inside the terminal (as in
+  tmdview) renders HTML with JavaScript plugins, but it draws through Herdr's
+  Kitty graphics support, which is slow. Native elements are fast; what they
+  can't do is listed under known limits.
 
 ## Known limits
 
-- Scrolling over a code block scrolls the editor, not the page: Herdr's
-  `Editor` keeps the wheel and has no option to stop. The block snaps back to
-  the top when the wheel stops.
+- Scrolling over a code block scrolls the editor, not the page: Herdr's `Editor`
+  keeps the wheel and has no option to stop. The block snaps back to the top
+  when the wheel stops.
 - `TextView` draws no images, so only images on a line of their own are shown.
 - `pane.go` and `pane.swap` need the window drawn; with it in the background, a
   replacement keeps only half the replaced pane's width.
