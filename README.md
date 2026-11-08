@@ -192,7 +192,7 @@ Herdr mods are JavaScript that describes native GPUI elements; there is no web
 view. So:
 
 - **PDF pages** are rasterized on demand with `pdftoppm` and drawn as images,
-  at a resolution that follows the zoom and your screen's scale.
+  at a resolution that follows the zoom, sized for a 2× (Retina) screen.
 - **Markdown** is split into text, code, diagram and image blocks, each drawn
   with Herdr's own element for it.
 - **Images** are copied under Herdr's folder and drawn with its image element,
@@ -242,6 +242,9 @@ herdr-app check ~/.config/herdr-app/mods/viewer
 The mods load from this folder through the symlinks, but Herdr's hot reload
 doesn't follow a symlink: after editing, close and reopen a viewer to get the
 new code. The rendering itself is only tested by hand, in Herdr.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the pieces fit
+together and why they're built this way.
 
 ## License
 
