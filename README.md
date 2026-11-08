@@ -49,6 +49,18 @@ For the popup that opens documents mentioned in a terminal, add this key to the
 Herdr updates an untouched `keys.json` with new default shortcuts. Once you
 edit it, the file is yours and new defaults have to be added by hand.
 
+To open documents with **Cmd-click** on their path in a terminal, install the
+small app that routes them (it's compiled locally, so it needs Xcode's command
+line tools):
+
+```sh
+mods/viewer/router/router.py install
+```
+
+It becomes macOS's default app for PDFs, Markdown and images, and saves the
+apps that opened them until now. `router.py uninstall` gives every type back
+and removes it.
+
 ## Use
 
 ```sh
@@ -66,11 +78,15 @@ page. The toolbar's **↗** opens the file in its default app.
 
 ### Opening a document an agent mentioned
 
-Herdr hands clicked terminal links straight to macOS, which opens Preview, and
-a mod can't intercept the click. Instead, press **Cmd-Shift-O** in the terminal:
-a popup lists the PDF and Markdown files (`.md`, `.markdown`) mentioned in its
-output and scrollback, newest first. Enter, a click or `1`–`9` opens one, placed
-the same way `view` places it.
+**Cmd-click** the path (with the router installed). Herdr asks macOS to open
+the file, macOS hands it to the router, and it opens in the viewer, placed the
+way `view` would place it from the clicked terminal. When Herdr isn't the app
+in front, the file goes to the app you used before, so Finder and other apps
+behave as they always did.
+
+Or press **Cmd-Shift-O** in the terminal: a popup lists the PDF and Markdown
+files (`.md`, `.markdown`) mentioned in its output and scrollback, newest
+first. Enter, a click or `1`–`9` opens one, placed the same way.
 
 It finds absolute paths, `~/…`, `file://` URLs and names relative to the
 terminal's folder, including paths an agent wrapped over two lines. Only files
@@ -135,7 +151,8 @@ The page is drawn natively, block by block:
 
 Front matter (`---` YAML or `+++` TOML at the top) is left out. Links to other
 Markdown files, PDFs or images open in the same viewer; web links open in the
-browser, and other files in their default app.
+browser. A link to any other file only shows it in Finder: opening it could run
+it, and a document may come from anywhere.
 
 Not shown: remote (https) images, images inside a paragraph, math, and
 `#heading` links within the page. Files over 1 MiB can't be read.
@@ -180,18 +197,32 @@ view. So:
   with Herdr's own element for it.
 - **Images** are copied under Herdr's folder and drawn with its image element,
   sized from the SVG's `viewBox` or from `sips`.
+- **Cmd-click** goes through `Herdr Viewer.app`, a background-only app built
+  from `mods/viewer/router/shim.swift` and registered as the default for PDFs,
+  Markdown and images. It only forwards each file, with the app that was in
+  front, to `router.py`, which opens it in the viewer if that was Herdr and in
+  the previously saved app otherwise.
 - **Placement** is a Python script, `mods/viewer/place.py`, that drives
   `herdr-app do`. It finds the neighbouring pane with `pane.go`; when the
   window hasn't drawn the panes yet, the tab's pane order (left first) decides.
   It records which viewer parked which terminal in
   `~/.config/herdr-app/data/viewer/state.json`.
 
-Rendered pages are cached in `~/.config/herdr-app/data/viewer/<hash>/`, and
-a document's cache is deleted after 14 days unused. Diagrams and copies of
-images go to `~/.config/herdr-app/data/viewer/md/`, since a mod can only draw
-images from Herdr's folder; that folder isn't cleaned automatically.
+Rendered pages are cached in `~/.config/herdr-app/data/viewer/<hash>/`, one
+folder per version of a document: when the file changes, the old version's
+pages are deleted. Diagrams and copies of images go to
+`~/.config/herdr-app/data/viewer/md/`, since a mod can only draw images from
+Herdr's folder. Anything not used for 14 days is deleted.
 
 ## Uninstall
+
+If you installed the router, give the file types back first:
+
+```sh
+~/.config/herdr-app/mods/viewer/router/router.py uninstall
+```
+
+Then:
 
 ```sh
 rm ~/.config/herdr-app/mods/viewer ~/.config/herdr-app/mods/pdf-links ~/.local/bin/view
@@ -204,7 +235,7 @@ Then remove the `cmd-shift-o` line from `~/.config/herdr-app/keys.json`.
 
 ```sh
 node --test tests/                    # path detection, Markdown blocks, front matter and links
-python3 -m unittest discover tests    # placement rules, against a fake window
+python3 -m unittest discover tests    # placement and Cmd-click routing, against fakes
 herdr-app check ~/.config/herdr-app/mods/viewer
 ```
 

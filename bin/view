@@ -4,23 +4,20 @@
 # Anything else (other files, options, no Herdr) goes to the system's `view` (vim -R).
 set -eu
 
-place="${HERDR_APP_HOME:-$HOME/.config/herdr-app}/mods/viewer/place.py"
+mods="${HERDR_APP_HOME:-$HOME/.config/herdr-app}/mods/viewer"
 
 tab=
 [ "${1:-}" = "--tab" ] && { tab=--tab; shift; }
 
+# router.py holds the list of types the viewer shows.
 is_doc() {
-  case "$1" in
-    *.[pP][dD][fF]|*.[mM][dD]|*.[mM][aA][rR][kK][dD][oO][wW][nN]) return 0 ;;
-    *.[pP][nN][gG]|*.[jJ][pP][gG]|*.[jJ][pP][eE][gG]|*.[gG][iI][fF]|*.[wW][eE][bB][pP]|*.[bB][mM][pP]|*.[sS][vV][gG]) return 0 ;;
-    *) return 1 ;;
-  esac
+  [ -f "$mods/router/router.py" ] && python3 "$mods/router/router.py" kind "$1"
 }
 
 if [ $# -eq 1 ] && is_doc "$1"; then
   [ -f "$1" ] || { echo "view: no such file: $1" >&2; exit 1; }
-  if [ -n "${HC_TERMINAL_ID:-}" ] && [ -f "$place" ]; then
-    exec python3 "$place" $tab "$1"
+  if [ -n "${HC_TERMINAL_ID:-}" ]; then
+    exec python3 "$mods/place.py" $tab "$1"
   fi
   exec open "$1"   # outside Herdr: the default app
 fi

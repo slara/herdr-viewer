@@ -49,10 +49,14 @@ opens one the same way.
   `Cmd-O`, `Ctrl-Q`.
 - Only visible pages plus one either side are rendered; while a new zoom
   renders, the previous image of the page stays up, scaled.
+- `↗` and `o` go through `router.py open --front ""`, so with Cmd-click
+  support installed the file reaches the previous default app instead of the
+  router (and the viewer again).
 - The file is checked every 2 seconds; when its size or date changes, the
   document reloads and a PDF stays on its page.
 - Markdown links: Markdown, PDF or image targets open in the same viewer, web links in
-  the browser, other files in their default app. Front matter is not shown.
+  the browser; other files are only revealed in Finder (`open -R`), since
+  opening them could run them. Front matter is not shown.
   `> [!NOTE]`-style alerts show their label as a bold line.
 - Scrolling over a code block scrolls the editor; 400ms after the wheel stops,
   the block is rebuilt at its top.
@@ -104,11 +108,34 @@ opens one the same way.
   `min(1, (width − 36) / w, (height − 32 − 36) / h)`, from the root's
   `on_size_change`; zoomed past the pane, an `overflow_scroll` area with
   `Scrollbar.new`.
-- **CLI** `bin/view`: one `.pdf`/`.md`/`.markdown`/image argument inside Herdr
+- **Router** (`router/router.py`, `router/shim.swift`): `router.py install`
+  compiles the shim with `swiftc` into `~/Applications/Herdr Viewer.app`, writes
+  its `Info.plist` with `plistlib` (`LSBackgroundOnly`, one
+  `CFBundleDocumentTypes` entry with role Viewer, rank Alternate, for
+  `com.adobe.pdf`, `net.daringfireball.markdown`, `public.png`, `public.jpeg`,
+  `com.compuserve.gif`, `org.webmproject.webp`, `com.microsoft.bmp`,
+  `public.svg-image`), signs it ad hoc and registers it with `lsregister`. It
+  saves each type's current handler under `defaults` in `state.json` and makes
+  the shim the default. The shim's `get` uses `LSCopyDefaultRoleHandlerForContentType`;
+  `set` uses `NSWorkspace.setDefaultApplication` when the shim claims a type and
+  `LSSetDefaultRoleHandlerForContentType` when a type goes to another app,
+  because macOS ignores or rejects the other combination. Launched to open
+  files, the shim takes the `kAEOpenDocuments` Apple Event through
+  `NSAppleEventManager` (installed in `applicationWillFinishLaunching`, after
+  AppKit's own), reads the frontmost app's bundle id and runs `router.py open
+  --front <id> <files>` with `~/.local/bin` and Homebrew on `PATH`. From
+  `dev.herdr.app`, `router.py` calls `place.open_doc(file, focused_terminal())`;
+  otherwise, or if that fails, `open -b <saved app>`. `router.py uninstall`
+  gives each type back and deletes the app. `place.py --focused` takes the
+  terminal in `herdr-app status`'s `focused_pane`; a focused viewer stands for
+  the terminal that opened it.
+- **CLI** `bin/view`: one argument that `router.py kind` accepts (`TYPES` there is the
+  one list of supported types outside the JavaScript), inside Herdr
   (`$HC_TERMINAL_ID` set) runs `place.py`; outside Herdr, `open`; anything else
   goes to `/usr/bin/view`.
 - Programs it runs: `pdfinfo`, `pdftoppm`, `mmdc`, `sips`, `stat`, `mv`, `cp`,
-  `find` (cache cleanup after 14 days), `open`, `osascript` (file picker),
+  `find` (cache cleanup: page folders and `md/` files unused for 14 days;
+  a changed PDF's old folder at once), `open`, `osascript` (file picker),
   `pbcopy`, `python3`, `hc read` (popup).
 
 ## Watch out
@@ -137,6 +164,12 @@ opens one the same way.
 - Herdr's hot reload doesn't follow symlinked mod folders.
 - `hc read` of a program on the alternate screen (Claude Code in fullscreen)
   returns only the visible screen: there's no scrollback to search.
+- Setting default apps: `NSWorkspace.setDefaultApplication` fails when it names
+  another app ("The file couldn't be opened"), and
+  `LSSetDefaultRoleHandlerForContentType` returns success but changes nothing
+  when an app names itself. Check the result with
+  `LSCopyDefaultRoleHandlerForContentType`; `NSWorkspace.urlForApplication`
+  can report a stale answer.
 - macOS only (`stat -f`, `sips`, `open`, `osascript`, `pbcopy`).
 
 ## Done when
@@ -154,3 +187,6 @@ opens one the same way.
   and the image fitted to the column; front matter is hidden.
 - In Claude Code, after it prints a PDF path, Cmd-Shift-O lists that file
   first and Enter opens it.
+- After `router.py install`, Cmd-clicking a PDF path in a Herdr terminal opens
+  it in the viewer, and double-clicking it in Finder opens the previous default
+  app; `router.py uninstall` restores the previous defaults.

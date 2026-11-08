@@ -28,11 +28,12 @@ const ASSETS = `${CACHE}/md`;      // Mermaid SVGs and copies of a Markdown file
 const MD_WIDTH = 880;              // px, the Markdown page column
 const CODE_LINE = 20;              // px per line of a code block (Editor at 13 px)
 const PLACE = () => `${appHome()}/mods/viewer/place.py`;   // placement and parked terminals
+const ROUTER = () => `${appHome()}/mods/viewer/router/router.py`;   // Cmd-click support
 
 const expand = (p) => (p.startsWith("~/") ? home() + p.slice(1) : p);
 const basename = (p) => p.split("/").pop();
 
-export default class PdfViewer extends View {
+export default class Viewer extends View {
   init(_props, cx) {
     this.handle = cx.focus_handle();
     this.scroll = VirtualListScrollHandle.new();
@@ -72,6 +73,7 @@ export default class PdfViewer extends View {
 
   open(file, cx) {
     this.reset();
+    if (file !== this.file) this.zoom = "fit";   // a reload keeps the zoom, another document doesn't
     this.file = file;
     const gen = this.generation;
     cx.spawn(async (cx) => {
@@ -136,6 +138,8 @@ export default class PdfViewer extends View {
       const st = await exec("stat", ["-f", "%m %z", doc.file]).catch(() => null);
       this.checking = false;
       if (st?.code === 0 && doc === this.doc && st.stdout.trim() !== doc.stamp) {
+        // The cache is per version of the file: the old version's pages are dead weight.
+        if (doc.dir) exec("rm", ["-rf", `${appHome()}/${doc.dir}`]).catch(() => {});
         const keep = this.shownPage;
         this.open(doc.file, cx);
         this.restorePage = keep;
@@ -143,10 +147,12 @@ export default class PdfViewer extends View {
     });
   }
 
-  // Drop cached renders nobody opened for a while.
+  // Drop what nobody opened for a while: PDF page folders whole, and diagrams
+  // and image copies one by one (their folder is shared, and used files are touched).
   prune() {
-    exec("find", [`${appHome()}/${CACHE}`, "-mindepth", "1", "-maxdepth", "1", "-type", "d",
+    exec("find", [`${appHome()}/${CACHE}`, "-mindepth", "1", "-maxdepth", "1", "-type", "d", "!", "-name", "md",
       "-mtime", `+${CACHE_DAYS}`, "-exec", "rm", "-rf", "{}", "+"]).catch(() => {});
+    exec("find", [`${appHome()}/${ASSETS}`, "-type", "f", "-mtime", `+${CACHE_DAYS}`, "-delete"]).catch(() => {});
   }
 
   // ---- geometry ------------------------------------------------------------
@@ -268,27 +274,25 @@ export default class PdfViewer extends View {
   }
 
   // This viewer's pane id. A pane mod isn't told it, but place.py records it in
-  // state.json under the viewer's id. A viewer opened without one counts as
-  // the only viewer in the focused tab.
+  // state.json under the viewer's id. Without it, the only viewer in the
+  // focused tab counts as this one.
   myPane(cx) {
     if (this.pane) return this.pane;
     const id = props()?.id;
-    if (!id) {
-      const tab = focused()?.tab;
-      const mine = panes().filter((p) => p.mod === "viewer" && p.tab === tab);
-      return mine.length === 1 ? mine[0].pane : null;
-    }
-    if (!this.lookingUp) {
-      this.lookingUp = true;
+    if (id && this.lookup === undefined) {
+      this.lookup = "pending";   // asked once: state.json is written before the viewer starts
       cx.spawn(async () => {
         try {
-          const st = JSON.parse((await readTextFile(`${appHome()}/data/viewer/state.json`)) ?? "{}");
+          const st = JSON.parse((await readTextFile(`${appHome()}/${CACHE}/state.json`)) ?? "{}");
           this.pane = st.viewers?.[id]?.pane ?? null;
-        } catch { /* not written yet: the next tick asks again */ }
-        this.lookingUp = false;
+        } catch { /* unreadable: use the fallback below */ }
+        this.lookup = "done";
       });
     }
-    return null;
+    if (id && this.lookup === "pending") return null;
+    const tab = focused()?.tab;
+    const mine = panes().filter((p) => p.mod === "viewer" && p.tab === tab);
+    return mine.length === 1 ? mine[0].pane : null;
   }
 
   // Herdr focuses the pane on the first click but the mod only hears the
@@ -306,8 +310,10 @@ export default class PdfViewer extends View {
     if (pane && panes().some((p) => p.pane === pane && p.mod === "viewer")) run("pane.close", { pane });
   }
 
+  // Through router.py: with Cmd-click support installed, plain `open` would hand
+  // the file to the router, which sends it straight back here.
   openExternally() {
-    if (this.file) exec("open", [this.file]).catch(() => {});
+    if (this.file) exec("python3", [ROUTER(), "open", "--front", "", this.file]).catch(() => {});
   }
 
   pickFile(cx) {
@@ -375,7 +381,7 @@ export default class PdfViewer extends View {
 
   toolbar(t) {
     const doc = this.doc;
-    const name = this.file ? basename(this.file) : "PDF viewer";
+    const name = this.file ? basename(this.file) : "Viewer";
     const bar = h_flex().h(TOOLBAR).flex_none().px(8).gap(4).items_center()
       .bg(t.chrome).border_b(1).border_color(t.border).text_size(12)
       .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).font_semibold()
@@ -397,13 +403,12 @@ export default class PdfViewer extends View {
         .child(`${Math.round(doc.asset.w)} × ${Math.round(doc.asset.h)}`))));
     }
     if (!doc.pages) return tail(bar);
-    return tail(bar
+    return tail(zoomControls(bar
       .child(this.button("prev", "‹", () => this.goTo(this.shownPage - 1), t))
       .child(div().text_color(t.muted).min_w(56).text_center()
         .child(`${this.shownPage + 1} / ${doc.pages.length}`))
       .child(this.button("next", "›", () => this.goTo(this.shownPage + 1), t))
-      .child(div().w(1).h(16).mx(4).bg(t.border))
-      .when(true, zoomControls));
+      .child(div().w(1).h(16).mx(4).bg(t.border))));
   }
 
   // ---- Markdown blocks -----------------------------------------------------
@@ -467,6 +472,8 @@ export default class PdfViewer extends View {
       if (r.code !== 0) throw new Error(r.stderr || "mmdc failed");
       const mv = await exec("mv", ["-f", `${tmp}.svg`, abs]);
       if (mv.code !== 0) throw new Error(mv.stderr);
+    } else {
+      await exec("touch", [abs]).catch(() => {});   // in use: keep it from prune()
     }
     const size = svgSize((await readTextFile(abs)) ?? "");
     if (!size) throw new Error("The diagram has no size");
@@ -486,6 +493,8 @@ export default class PdfViewer extends View {
     if (!(await fs.exists(abs))) {
       const cp = await exec("cp", [target, abs]);
       if (cp.code !== 0) throw new Error(cp.stderr);
+    } else {
+      await exec("touch", [abs]).catch(() => {});   // in use: keep it from prune()
     }
     if (ext === "svg") {
       const size = svgSize((await readTextFile(abs)) ?? "");
@@ -508,13 +517,15 @@ export default class PdfViewer extends View {
     cx.timer.after(1500, (cx) => { if (this.copied === i) { this.copied = null; cx.notify(); } });
   }
 
-  // A clicked link: Markdown, PDFs and images open here, the web in the browser,
-  // other files in their default app. Handling the click ourselves turns off
-  // TextView's own #anchor jumps.
+  // A clicked link: Markdown, PDFs and images open here, the web in the browser.
+  // Any other file is only shown in Finder: opening it could run it (an .app, a
+  // .command), and a document may come from anywhere. Handling the click
+  // ourselves turns off TextView's own #anchor jumps.
   followLink(url, cx) {
     const { kind, target } = resolveLink(url, this.doc.file);
     if (kind === "doc") this.open(target, cx);
-    else if (kind !== "anchor") exec("open", [target]).catch(() => {});
+    else if (kind === "web") exec("open", [target]).catch(() => {});
+    else if (kind === "file") exec("open", ["-R", target]).catch(() => {});
   }
 
   block(b, i, t, inner) {
@@ -617,7 +628,7 @@ export default class PdfViewer extends View {
 
   render(cx) {
     const t = theme();
-    return v_flex().id("pdf-root").size_full().bg(t.canvas)
+    return v_flex().id("viewer-root").size_full().bg(t.canvas)
       .track_focus(this.handle)
       .on_key_down((e, cx) => this.key(e, cx))
       .on_mouse_down("left", () => this.handle.focus())

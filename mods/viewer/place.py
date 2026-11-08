@@ -2,6 +2,7 @@
 """Open a document in a viewer pane, placed beside the terminal that asked.
 
   place.py [--from tN] [--tab] FILE   open FILE
+  place.py --focused FILE             open FILE from the focused pane (a Cmd-click, via router/)
   place.py --closed ID                a viewer closed: give back the terminal it parked
   place.py --restore ID               close viewer ID and give back its terminal
 
@@ -171,6 +172,19 @@ def take_place(old, props):
     return made
 
 
+def focused_terminal():
+    """The terminal in the focused pane. A focused viewer counts as the terminal
+    that opened it, so a new document replaces it rather than adding a pane."""
+    pane = herdr("status").get("focused_pane")
+    term = terminal_panes().get(pane)
+    if term:
+        return term[0]
+    with State() as st:
+        _, v = st.by_pane(pane)
+    src = (v or {}).get("src")
+    return terminal_panes().get(src, (None,))[0] if src else None
+
+
 def open_doc(path, source, tab):
     """From a plain terminal: the viewer takes that terminal's place (parked).
     From an agent (Claude Code): it takes the place of the pane on the agent's
@@ -260,6 +274,15 @@ def give_back(v):
         do("terminal.keep", terminal=term, place="tab")
 
 
+def running(term):
+    """Whether herdr-core still runs `term` (with a pane or parked)."""
+    r = subprocess.run(["hc", "ls", "--json"], capture_output=True, text=True, timeout=20)
+    try:
+        return any(t.get("address") == term for t in json.loads(r.stdout).get("terminals", []))
+    except (json.JSONDecodeError, AttributeError):
+        return True  # can't tell: assume it is, and keep trying
+
+
 def closed(vid):
     with State() as st:
         v = st.viewers.pop(vid, None)
@@ -267,7 +290,10 @@ def closed(vid):
             try:
                 give_back(v)
             except HerdrError:
-                st.viewers[vid] = v  # the window may be quitting: keep it for next time
+                # The window may be quitting: keep the entry to retry next time, unless
+                # the terminal itself is gone (its tab closed), so there's nothing to give back.
+                if running(v.get("parked")):
+                    st.viewers[vid] = v
                 raise
 
 
@@ -301,6 +327,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file", nargs="?")
     ap.add_argument("--from", dest="source", default=os.environ.get("HC_TERMINAL_ID"))
+    ap.add_argument("--focused", action="store_true")
     ap.add_argument("--tab", action="store_true")
     ap.add_argument("--closed", metavar="ID")
     ap.add_argument("--restore", metavar="ID")
@@ -314,7 +341,7 @@ def main():
             path = os.path.realpath(os.path.expanduser(a.file))
             if not os.path.isfile(path):
                 raise HerdrError(f"no such file: {a.file}")
-            open_doc(path, a.source, a.tab)
+            open_doc(path, focused_terminal() if a.focused else a.source, a.tab)
         else:
             ap.error("a file is required")
     except (HerdrError, subprocess.TimeoutExpired, FileNotFoundError) as e:
